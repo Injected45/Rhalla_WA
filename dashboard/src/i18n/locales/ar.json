@@ -1,0 +1,512 @@
+{
+  "common": {
+    "appName": "OpenWA",
+    "appSubtitle": "واجهة برمجة واتساب",
+    "loading": "جارٍ التحميل...",
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "delete": "حذف",
+    "edit": "تعديل",
+    "create": "إنشاء",
+    "close": "إغلاق",
+    "submit": "إرسال",
+    "confirm": "تأكيد",
+    "search": "بحث",
+    "filter": "تصفية",
+    "actions": "إجراءات",
+    "status": "الحالة",
+    "name": "الاسم",
+    "role": "الدور",
+    "type": "النوع",
+    "url": "الرابط",
+    "port": "المنفذ",
+    "host": "المضيف",
+    "username": "اسم المستخدم",
+    "password": "كلمة المرور",
+    "active": "نشط",
+    "inactive": "غير نشط",
+    "enabled": "مُفعّل",
+    "disabled": "مُعطّل",
+    "connected": "متصل",
+    "disconnected": "غير متصل",
+    "never": "أبدًا",
+    "justNow": "الآن",
+    "minAgo": "منذ {{count}} دقيقة",
+    "hoursAgo": "منذ {{count}} ساعة",
+    "optional": "اختياري",
+    "language": "اللغة",
+    "english": "English",
+    "arabic": "العربية",
+    "back": "رجوع",
+    "next": "التالي",
+    "previous": "السابق",
+    "expand": "توسيع",
+    "collapse": "طي",
+    "logout": "تسجيل الخروج",
+    "refresh": "تحديث",
+    "errorGeneric": "حدث خطأ",
+    "unknownError": "خطأ غير معروف"
+  },
+  "theme": {
+    "light": "فاتح",
+    "dark": "داكن",
+    "system": "النظام",
+    "label": "السمة: {{value}}"
+  },
+  "nav": {
+    "dashboard": "لوحة التحكم",
+    "sessions": "الجلسات",
+    "webhooks": "الويب هوك",
+    "apiKeys": "مفاتيح API",
+    "messageTester": "اختبار الرسائل",
+    "infrastructure": "البنية التحتية",
+    "plugins": "الإضافات",
+    "logs": "السجلات"
+  },
+  "errorBoundary": {
+    "title": "حدث خطأ ما",
+    "description": "واجهت لوحة التحكم خطأً غير متوقع.",
+    "reload": "إعادة تحميل لوحة التحكم"
+  },
+  "login": {
+    "apiKey": "مفتاح API",
+    "apiKeyPlaceholder": "أدخل مفتاح API الخاص بك",
+    "apiKeyRequired": "مفتاح API مطلوب",
+    "connect": "اتصال",
+    "connecting": "جارٍ الاتصال...",
+    "invalidKey": "مفتاح API غير صالح",
+    "connectionError": "تعذّر الاتصال بالخادم. يُرجى المحاولة مرة أخرى.",
+    "help": "تحتاج مساعدة؟",
+    "viewDocs": "عرض الوثائق",
+    "footer": "صُنع بحب بواسطة Yudhi Armyndharis ومجتمع OpenWA",
+    "version": "إصدار {{version}} · {{date}}"
+  },
+  "dashboard": {
+    "title": "لوحة التحكم",
+    "subtitle": "نظرة عامة على جلسات واتساب ونشاطك",
+    "stats": {
+      "activeSessions": "الجلسات النشطة",
+      "messagesToday": "رسائل اليوم",
+      "webhooksConfigured": "الويب هوك المُهيّأة",
+      "apiCalls": "طلبات API (24 ساعة)"
+    },
+    "sessionsOverview": "نظرة عامة على الجلسات",
+    "showingSessions": "عرض {{shown}} من {{total}} جلسة",
+    "columns": {
+      "sessionId": "مُعرّف الجلسة",
+      "phone": "رقم الهاتف",
+      "status": "الحالة",
+      "lastActive": "آخر نشاط",
+      "actions": "إجراءات"
+    },
+    "noSessions": "لا توجد جلسات. أنشئ واحدة للبدء.",
+    "view": "عرض",
+    "disconnect": "قطع الاتصال",
+    "errorPrefix": "خطأ: {{message}}",
+    "loadError": "فشل تحميل البيانات"
+  },
+  "sessionStatus": {
+    "created": "جديد",
+    "idle": "خامل",
+    "initializing": "جارٍ البدء...",
+    "connecting": "جارٍ الاتصال...",
+    "qr_ready": "امسح رمز QR",
+    "ready": "متصل",
+    "disconnected": "غير متصل"
+  },
+  "sessions": {
+    "title": "الجلسات",
+    "subtitle": "إدارة جلسات واتساب واتصالات رمز QR",
+    "newSession": "جلسة جديدة",
+    "searchPlaceholder": "البحث في الجلسات...",
+    "filter": {
+      "all": "كل الحالات",
+      "active": "نشط (متصل)",
+      "inactive": "غير نشط",
+      "connecting": "جارٍ الاتصال"
+    },
+    "empty": {
+      "title": "لا توجد جلسات",
+      "description": "أنشئ جلسة جديدة للبدء"
+    },
+    "create": {
+      "title": "إنشاء جلسة جديدة",
+      "label": "اسم الجلسة",
+      "placeholder": "مثال: marketing-bot",
+      "hint": "استخدم أحرفًا إنجليزية صغيرة وأرقامًا وشرطات فقط. مثال: <code>customer-support</code>، <code>bot-1</code>",
+      "invalidChars": "أحرف غير صالحة. يُسمح فقط بالأحرف الإنجليزية الصغيرة والأرقام والشرطات.",
+      "tooLong": "يجب ألا يتجاوز الاسم 50 حرفًا ({{length}}/50).",
+      "duplicate": "توجد جلسة بهذا الاسم بالفعل.",
+      "successTitle": "تم إنشاء الجلسة",
+      "successDesc": "تم إنشاء الجلسة \"{{name}}\" بنجاح",
+      "errorTitle": "فشل الإنشاء",
+      "errorDefault": "فشل إنشاء الجلسة"
+    },
+    "delete": {
+      "title": "تأكيد الحذف",
+      "message": "هل أنت متأكد أنك تريد حذف الجلسة <strong>\"{{name}}\"</strong>؟",
+      "warning": "لا يمكن التراجع عن هذا الإجراء.",
+      "successTitle": "تم حذف الجلسة",
+      "successDescNamed": "تم حذف الجلسة \"{{name}}\"",
+      "successDescGeneric": "تم حذف الجلسة",
+      "errorTitle": "فشل الحذف",
+      "errorDefault": "فشل حذف الجلسة"
+    },
+    "qr": {
+      "title": "امسح رمز QR",
+      "step1": "<strong>1.</strong> افتح واتساب على هاتفك",
+      "step2": "<strong>2.</strong> اضغط على <strong>القائمة</strong> ← <strong>الأجهزة المرتبطة</strong>",
+      "step3": "<strong>3.</strong> اضغط على <strong>ربط جهاز</strong> وامسح هذا الرمز",
+      "autoRefresh": "يتم تحديث رمز QR تلقائيًا كل 5 ثوانٍ",
+      "generating": "جارٍ إنشاء رمز QR...",
+      "unavailable": "رمز QR غير متاح بعد. حاول مرة أخرى بعد لحظة.",
+      "preparing": "جارٍ تجهيز رمز QR...",
+      "showQr": "عرض رمز QR",
+      "loading": "جارٍ التحميل...",
+      "scanToConnect": "امسح رمز QR للاتصال"
+    },
+    "details": {
+      "title": "تفاصيل الجلسة",
+      "name": "الاسم",
+      "status": "الحالة",
+      "sessionId": "مُعرّف الجلسة",
+      "phone": "رقم الهاتف",
+      "phoneNone": "غير متصل",
+      "created": "تاريخ الإنشاء",
+      "lastActive": "آخر نشاط"
+    },
+    "actions": {
+      "view": "عرض",
+      "start": "بدء",
+      "stop": "إيقاف",
+      "reconnect": "إعادة الاتصال",
+      "delete": "حذف"
+    },
+    "toasts": {
+      "readyTitle": "الجلسة جاهزة",
+      "readyDesc": "جلسة واتساب متصلة الآن",
+      "disconnectedTitle": "تم قطع اتصال الجلسة",
+      "disconnectedDesc": "تم قطع اتصال جلسة واتساب"
+    },
+    "card": {
+      "phone": "الهاتف",
+      "sessionId": "مُعرّف الجلسة",
+      "lastActive": "آخر نشاط"
+    }
+  },
+  "webhooks": {
+    "title": "الويب هوك",
+    "subtitle": "تهيئة استدعاءات HTTP لإشعارات الأحداث الفورية",
+    "addWebhook": "إضافة ويب هوك",
+    "createTitle": "إنشاء ويب هوك",
+    "editTitle": "تعديل الويب هوك",
+    "deleteTitle": "حذف الويب هوك",
+    "deleteConfirm": "هل أنت متأكد أنك تريد حذف هذا الويب هوك؟",
+    "selectSession": "اختر جلسة...",
+    "session": "الجلسة",
+    "events": "الأحداث",
+    "available": "الأحداث المتاحة",
+    "saveChanges": "حفظ التغييرات",
+    "columns": {
+      "url": "الرابط",
+      "events": "الأحداث",
+      "session": "الجلسة",
+      "status": "الحالة",
+      "actions": "إجراءات"
+    },
+    "empty": {
+      "title": "لا توجد ويب هوك مُهيّأة",
+      "description": "أضف ويب هوك لتلقّي إشعارات الأحداث الفورية"
+    },
+    "toasts": {
+      "created": "تم إنشاء الويب هوك بنجاح",
+      "createFailed": "فشل إنشاء الويب هوك: {{message}}",
+      "deleted": "تم حذف الويب هوك بنجاح",
+      "deleteFailed": "فشل حذف الويب هوك: {{message}}",
+      "updated": "تم تحديث الويب هوك بنجاح",
+      "updateFailed": "فشل تحديث الويب هوك: {{message}}",
+      "testOk": "نجح اختبار الويب هوك! الحالة: {{status}}",
+      "testFailed": "فشل اختبار الويب هوك: {{message}}",
+      "testError": "فشل اختبار الويب هوك: {{message}}"
+    },
+    "actions": {
+      "test": "اختبار",
+      "edit": "تعديل",
+      "delete": "حذف"
+    },
+    "eventDescriptions": {
+      "message.received": "عند استلام رسالة",
+      "message.sent": "عند إرسال رسالة",
+      "session.connected": "عند اتصال جلسة",
+      "session.disconnected": "عند قطع اتصال جلسة",
+      "session.qr": "عند إنشاء رمز QR",
+      "all": "كل الأحداث"
+    }
+  },
+  "apiKeys": {
+    "title": "مفاتيح API",
+    "subtitle": "إدارة مفاتيح API للمصادقة والتحكم في الوصول",
+    "createBtn": "إنشاء مفتاح API",
+    "modalTitle": "إنشاء مفتاح API",
+    "createdTitle": "تم إنشاء مفتاح API",
+    "createdHint": "انسخ هذا المفتاح الآن. لن تتمكن من رؤيته مرة أخرى.",
+    "namePlaceholder": "مثال: مفتاح الإنتاج",
+    "rolesTitle": "مرجع الأدوار",
+    "roles": {
+      "admin": "مسؤول",
+      "operator": "مُشغّل",
+      "viewer": "مُشاهد"
+    },
+    "roleDescriptions": {
+      "admin": "وصول كامل إلى جميع الموارد",
+      "operator": "إدارة الجلسات والرسائل",
+      "viewer": "وصول للقراءة فقط"
+    },
+    "columns": {
+      "name": "الاسم",
+      "key": "المفتاح",
+      "role": "الدور",
+      "status": "الحالة",
+      "lastUsed": "آخر استخدام",
+      "actions": "إجراءات"
+    },
+    "statuses": {
+      "active": "نشط",
+      "revoked": "ملغى"
+    },
+    "empty": {
+      "title": "لم يتم إنشاء مفاتيح API",
+      "description": "أنشئ مفتاح API لمصادقة طلباتك"
+    },
+    "confirm": {
+      "deleteTitle": "حذف مفتاح API",
+      "revokeTitle": "إلغاء مفتاح API",
+      "deleteMessage": "هل أنت متأكد أنك تريد حذف <strong>{{name}}</strong> نهائيًا؟ لا يمكن التراجع عن هذا الإجراء.",
+      "revokeMessage": "هل أنت متأكد أنك تريد إلغاء <strong>{{name}}</strong>؟ لن يعمل بعد الآن.",
+      "delete": "حذف",
+      "revoke": "إلغاء"
+    },
+    "actions": {
+      "copy": "نسخ",
+      "revoke": "إلغاء",
+      "delete": "حذف"
+    }
+  },
+  "logs": {
+    "title": "سجلات التدقيق",
+    "subtitle": "تتبّع ومراجعة جميع إجراءات API وأحداث النظام",
+    "exportCsv": "تصدير CSV",
+    "searchPlaceholder": "البحث في السجلات...",
+    "severity": {
+      "all": "كل المستويات",
+      "info": "معلومات",
+      "warn": "تحذير",
+      "error": "خطأ"
+    },
+    "columns": {
+      "timestamp": "الطابع الزمني",
+      "action": "الإجراء",
+      "session": "الجلسة",
+      "apiKey": "مفتاح API",
+      "ip": "عنوان IP",
+      "severity": "المستوى"
+    },
+    "empty": {
+      "title": "لا توجد سجلات",
+      "description": "ستظهر سجلات التدقيق هنا عند تنفيذ الإجراءات"
+    }
+  },
+  "messageTester": {
+    "title": "اختبار الرسائل",
+    "subtitle": "إرسال رسائل تجريبية عبر API",
+    "compose": "إرسال رسالة تجريبية",
+    "responseTitle": "استجابة API",
+    "session": "الجلسة",
+    "noReadySessions": "لا توجد جلسات جاهزة",
+    "sessionOptionPhoneNone": "بدون هاتف",
+    "recipientType": "نوع المستلِم",
+    "personal": "شخصي",
+    "group": "مجموعة",
+    "selectGroup": "اختر مجموعة",
+    "recipientPhone": "رقم هاتف المستلِم",
+    "loadingGroups": "جارٍ تحميل المجموعات...",
+    "noGroupsFound": "لا توجد مجموعات",
+    "selectGroupHint": "اختر مجموعة من واتساب الخاص بك",
+    "phoneHint": "استخدم الصيغة الدولية بدون مسافات",
+    "messageType": "نوع الرسالة",
+    "types": {
+      "text": "نص",
+      "image": "صورة",
+      "video": "فيديو",
+      "audio": "صوت",
+      "document": "مستند"
+    },
+    "messageContent": "محتوى الرسالة",
+    "messagePlaceholder": "أدخل رسالتك هنا...",
+    "mediaUrl": "رابط الوسائط",
+    "caption": "التعليق",
+    "filename": "اسم الملف",
+    "captionPlaceholder": "أدخل التعليق...",
+    "filenamePlaceholder": "document.pdf",
+    "send": "إرسال الرسالة",
+    "sending": "جارٍ الإرسال...",
+    "viewOnly": "عرض فقط",
+    "responseEmpty": "أرسل رسالة لرؤية استجابة API",
+    "successLabel": "200 OK - نجاح",
+    "failedLabel": "400 - فشل",
+    "response": {
+      "timestamp": "الطابع الزمني",
+      "messageId": "مُعرّف الرسالة",
+      "error": "خطأ"
+    },
+    "sendFailed": "فشل إرسال الرسالة"
+  },
+  "infrastructure": {
+    "title": "البنية التحتية",
+    "subtitle": "تهيئة إعدادات الخادم وقاعدة البيانات والتخزين المؤقت والتخزين والمحرك",
+    "saveConfig": "حفظ التهيئة",
+    "saving": "جارٍ الحفظ...",
+    "server": {
+      "title": "تهيئة الخادم",
+      "production": "الإنتاج",
+      "development": "التطوير",
+      "environment": "البيئة",
+      "domain": "النطاق",
+      "apiPort": "منفذ API",
+      "dashboardPort": "منفذ لوحة التحكم",
+      "corsOrigins": "أصول CORS",
+      "corsPlaceholder": "* أو أصول مفصولة بفواصل",
+      "publicApiUrl": "رابط API العام (اختياري)",
+      "publicDashboardUrl": "رابط لوحة التحكم العام (اختياري)"
+    },
+    "webhook": {
+      "title": "الويب هوك وتحديد المعدل",
+      "settings": "إعدادات الويب هوك",
+      "timeout": "المهلة (مللي ثانية)",
+      "maxRetries": "أقصى عدد محاولات",
+      "retryDelay": "تأخير المحاولة (مللي ثانية)",
+      "rateLimit": "تحديد المعدل",
+      "window": "النافذة الزمنية (ثوانٍ)",
+      "maxReq": "أقصى عدد طلبات لكل نافذة"
+    },
+    "database": {
+      "title": "تهيئة قاعدة البيانات",
+      "sqlite": "SQLite",
+      "sqliteDesc": "قاعدة بيانات محلية قائمة على ملف",
+      "postgres": "PostgreSQL",
+      "postgresDesc": "قاعدة بيانات جاهزة للإنتاج",
+      "useBuiltIn": "استخدام حاوية PostgreSQL المدمجة",
+      "builtInDesc": "سيدير OpenWA حاوية PostgreSQL نيابةً عنك",
+      "dbName": "اسم قاعدة البيانات",
+      "poolSize": "حجم التجمّع",
+      "ssl": "اتصال SSL",
+      "sslDesc": "تفعيل TLS/SSL لاتصالات قاعدة بيانات آمنة",
+      "migrationsTitle": "ترحيلات قاعدة البيانات",
+      "migrationsStatus": "تتم مزامنة المخطط تلقائيًا مع TypeORM",
+      "migrationsHint": "تتم إدارة الترحيلات تلقائيًا. استخدم سطر الأوامر للترحيلات اليدوية."
+    },
+    "redis": {
+      "title": "Redis",
+      "enable": "تفعيل Redis",
+      "enableDesc": "مطلوب للتخزين المؤقت وتخزين الجلسات وطوابير BullMQ",
+      "useBuiltIn": "استخدام حاوية Redis المدمجة",
+      "builtInDesc": "سيدير OpenWA حاوية Redis نيابةً عنك",
+      "queueTitle": "تفعيل نظام طوابير BullMQ",
+      "queueDesc": "استخدام طوابير الرسائل لتسليم موثوق للرسائل والويب هوك",
+      "statsTitle": "إحصائيات الطابور",
+      "messageQueue": "طابور الرسائل",
+      "webhookQueue": "طابور الويب هوك",
+      "pending": "قيد الانتظار",
+      "completed": "مكتمل",
+      "failed": "فشل",
+      "clearFailed": "مسح المهام الفاشلة",
+      "viewBullMq": "عرض لوحة Bull MQ",
+      "disabledTitle": "Redis مُعطّل",
+      "disabledDesc": "فعّل Redis للتخزين المؤقت وتخزين الجلسات وطوابير رسائل BullMQ.",
+      "passwordOptional": "(اختياري)"
+    },
+    "storage": {
+      "title": "تهيئة التخزين",
+      "local": "نظام الملفات المحلي",
+      "localDesc": "تخزين ملفات الوسائط محليًا",
+      "s3": "Amazon S3",
+      "s3Desc": "تخزين سحابي (متوافق مع S3)",
+      "useBuiltIn": "استخدام حاوية MinIO المدمجة",
+      "builtInDesc": "سيدير OpenWA حاوية MinIO (متوافقة مع S3) نيابةً عنك",
+      "storagePath": "مسار التخزين",
+      "bucket": "اسم الحاوية",
+      "region": "المنطقة",
+      "accessKey": "مفتاح الوصول",
+      "secretKey": "المفتاح السري",
+      "endpoint": "نقطة نهاية مخصصة (اختياري)",
+      "endpointHint": "لـ MinIO أو خدمات أخرى متوافقة مع S3"
+    },
+    "statusLabels": {
+      "connected": "متصل",
+      "disconnected": "غير متصل",
+      "disabled": "مُعطّل"
+    },
+    "restart": {
+      "idleTitle": "⚙️ تم حفظ التهيئة",
+      "restartingTitle": "🔄 جارٍ إعادة تشغيل الخادم...",
+      "waitingTitle": "⏳ يُرجى الانتظار...",
+      "successTitle": "✅ الخادم جاهز",
+      "errorTitle": "❌ فشلت إعادة التشغيل",
+      "idleDesc": "تم حفظ التهيئة في <code>.env.generated</code>.<br/>يلزم إعادة تشغيل الخادم لتطبيق التغييرات.",
+      "later": "إعادة التشغيل لاحقًا",
+      "now": "إعادة التشغيل الآن",
+      "restartingMsg": "جارٍ إعادة تشغيل الخادم... {{count}} ثانية",
+      "checking": "جارٍ التحقق من حالة الخادم...",
+      "dontClose": "يُرجى عدم إغلاق هذه النافذة",
+      "successMsg": "عاد الخادم للعمل! ستُعاد تحميل الصفحة تلقائيًا.",
+      "errorMsg": "لم يستجب الخادم بعد 30 ثانية. يُرجى التحقق من سجلات Docker وإعادة التشغيل يدويًا.",
+      "reload": "إعادة تحميل الصفحة"
+    },
+    "toasts": {
+      "saveFailed": "فشل الحفظ"
+    }
+  },
+  "plugins": {
+    "title": "الإضافات",
+    "subtitle": "إدارة المحركات وخلفيات التخزين والإضافات",
+    "refresh": "تحديث",
+    "engineCard": "محرك واتساب النشط",
+    "running": "قيد التشغيل",
+    "supportedFeatures": "الميزات المدعومة:",
+    "more": "+{{count}} أخرى",
+    "builtIn": "مدمج",
+    "noDescription": "لا يوجد وصف متاح",
+    "required": "مطلوب",
+    "active": "نشط",
+    "activate": "تفعيل",
+    "enable": "تمكين",
+    "disable": "تعطيل",
+    "healthCheck": "فحص الحالة",
+    "configure": "تهيئة",
+    "empty": {
+      "title": "لا توجد إضافات",
+      "description": "ثبّت إضافات لتوسيع وظائف OpenWA"
+    },
+    "config": {
+      "title": "تهيئة {{name}}",
+      "restartNotice": "تتطلب التغييرات إعادة تشغيل الخادم لتصبح فعّالة",
+      "engineType": "نوع المحرك",
+      "headless": "وضع بدون واجهة",
+      "headlessDesc": "تشغيل المتصفح بدون واجهة مرئية (موصى به للإنتاج)",
+      "sessionDataPath": "مسار بيانات الجلسة",
+      "browserArgs": "وسائط المتصفح",
+      "noOptions": "لا توجد خيارات تهيئة متاحة لهذه الإضافة",
+      "save": "حفظ التهيئة"
+    },
+    "toasts": {
+      "errorTitle": "خطأ في الإضافة",
+      "errorDefault": "فشل تبديل الإضافة",
+      "healthOk": "نجح فحص الحالة",
+      "healthFail": "فشل فحص الحالة",
+      "healthError": "خطأ في فحص الحالة",
+      "savedTitle": "تم حفظ التهيئة",
+      "savedDesc": "يلزم إعادة تشغيل الخادم لتطبيق التغييرات.",
+      "saveFailed": "فشل الحفظ"
+    }
+  }
+}

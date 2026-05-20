@@ -85,8 +85,8 @@ export function Layout({ onLogout, userRole }: LayoutProps) {
     const next = supportedLanguages[(idx + 1) % supportedLanguages.length];
     void i18n.changeLanguage(next);
   };
-  const languageLabel = currentLang === 'he' ? 'עברית' : 'EN';
-  const isRtl = currentLang === 'he';
+  const languageLabel = currentLang === 'ar' ? 'العربية' : 'EN';
+  const isRtl = currentLang === 'ar';
 
   return (
     <div className="layout">

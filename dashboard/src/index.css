@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&display=swap');
 
 :root {
   font-family: 'Plus Jakarta Sans', system-ui, Avenir, Helvetica, Arial, sans-serif;
@@ -6,9 +6,9 @@
   font-weight: 400;
 }
 
-html[lang="he"],
+html[lang="ar"],
 html[dir="rtl"] {
-  font-family: 'Heebo', 'Rubik', 'Noto Sans Hebrew', 'Segoe UI', Arial, sans-serif;
+  font-family: 'Cairo', 'Noto Sans Arabic', 'Segoe UI', Arial, sans-serif;
 }
 
 :root {
