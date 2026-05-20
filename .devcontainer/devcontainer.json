@@ -1,0 +1,16 @@
+{
+  "name": "OpenWA",
+  // Node 20 LTS — matches the project and avoids the Node 24 native-module issues.
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:20-bookworm",
+
+  // Install the system libraries Chromium/Puppeteer needs (whatsapp-web.js engine),
+  // then install backend + dashboard dependencies.
+  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libasound2 libpango-1.0-0 libcairo2 fonts-liberation && npm install",
+
+  // Expose the API and dashboard so you get public URLs.
+  "forwardPorts": [2785, 2886],
+  "portsAttributes": {
+    "2785": { "label": "OpenWA API", "onAutoForward": "notify" },
+    "2886": { "label": "OpenWA Dashboard", "onAutoForward": "openBrowser" }
+  }
+}
