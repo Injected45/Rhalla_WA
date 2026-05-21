@@ -323,6 +323,42 @@ export interface MessageRecord {
 }
 
 // =============================================================================
+// Group API
+// =============================================================================
+
+export interface GroupSummary {
+  id: string;
+  name: string;
+  participantsCount?: number;
+  isAdmin?: boolean;
+}
+
+export interface GroupParticipantInfo {
+  id: string;
+  number: string;
+  name?: string;
+  isAdmin: boolean;
+  isSuperAdmin: boolean;
+}
+
+export interface GroupInfo {
+  id: string;
+  name: string;
+  description?: string;
+  owner?: string;
+  createdAt?: number;
+  participants: GroupParticipantInfo[];
+  isReadOnly?: boolean;
+  isAnnounce?: boolean;
+}
+
+export const groupApi = {
+  list: (sessionId: string) => request<GroupSummary[]>(`/sessions/${sessionId}/groups`),
+  get: (sessionId: string, groupId: string) =>
+    request<GroupInfo>(`/sessions/${sessionId}/groups/${encodeURIComponent(groupId)}`),
+};
+
+// =============================================================================
 // Health & Infrastructure API
 // =============================================================================
 

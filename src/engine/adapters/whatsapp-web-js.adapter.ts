@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events';
 import { Client, LocalAuth, MessageMedia, Message } from 'whatsapp-web.js';
+import { parsePhoneNumberFromString } from 'libphonenumber-js';
 import * as qrcode from 'qrcode';
 import * as path from 'path';
 import {
@@ -228,7 +229,32 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
       }
     }
 
+    // Resolve the real sender identity. `from`/`to` can be an opaque @lid
+    // (WhatsApp privacy LinkedID); getContact() exposes the actual phone
+    // number and nickname (pushname) when WhatsApp makes them available.
+    try {
+      const contact = await msg.getContact();
+      const number = contact?.number || undefined;
+      incomingMessage.senderNumber = number;
+      incomingMessage.senderName = contact?.pushname || contact?.name || undefined;
+      incomingMessage.senderCountry = number ? this.resolveCountry(number) : undefined;
+    } catch (error) {
+      this.logger.warn('Could not resolve sender contact', String(error));
+    }
+
     return incomingMessage;
+  }
+
+  /** Resolve a country name from an E.164-ish phone number (no '+'). */
+  private resolveCountry(number: string): string | undefined {
+    try {
+      const parsed = parsePhoneNumberFromString(`+${number.replace(/^\+/, '')}`);
+      if (!parsed?.country) return undefined;
+      const name = new Intl.DisplayNames(['en'], { type: 'region' }).of(parsed.country);
+      return name || parsed.country;
+    } catch {
+      return undefined;
+    }
   }
 
   private setStatus(status: EngineStatus): void {

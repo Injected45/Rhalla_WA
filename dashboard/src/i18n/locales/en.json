@@ -60,6 +60,7 @@
     "apiKeys": "API Keys",
     "messageTester": "Message Tester",
     "messages": "Messages",
+    "groups": "Groups",
     "infrastructure": "Infrastructure",
     "plugins": "Plugins",
     "logs": "Logs"
@@ -90,6 +91,41 @@
     "empty": {
       "title": "No messages yet",
       "description": "Incoming and sent messages for this session will appear here."
+    }
+  },
+  "groups": {
+    "title": "Groups",
+    "subtitle": "Look up group IDs and details for a session",
+    "noSessions": "No connected sessions",
+    "byId": {
+      "title": "Get group by ID",
+      "hint": "Enter a group ID (e.g. 120363xxxxxxxxxx@g.us) to see its name and details.",
+      "button": "Get details"
+    },
+    "all": {
+      "title": "All groups",
+      "button": "Load groups",
+      "name": "Name",
+      "id": "Group ID",
+      "members": "Members",
+      "view": "View",
+      "empty": "No groups loaded. Click \"Load groups\"."
+    },
+    "detail": {
+      "name": "Name",
+      "id": "Group ID",
+      "owner": "Owner",
+      "created": "Created",
+      "description": "Description",
+      "participants": "Participants",
+      "number": "Number",
+      "pName": "Name",
+      "role": "Role"
+    },
+    "role": {
+      "owner": "Owner",
+      "admin": "Admin",
+      "member": "Member"
     }
   },
   "errorBoundary": {

@@ -32,6 +32,12 @@ export interface IncomingMessage {
   timestamp: number;
   fromMe: boolean;
   isGroup: boolean;
+  // Resolved sender identity. `from` may be an opaque @lid (WhatsApp privacy
+  // LinkedID); these expose the real phone number, nickname and country when
+  // WhatsApp makes them available.
+  senderNumber?: string;
+  senderName?: string;
+  senderCountry?: string;
   media?: {
     mimetype: string;
     filename?: string;
