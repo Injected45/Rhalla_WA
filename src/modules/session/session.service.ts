@@ -85,6 +85,14 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
       SessionStatus.AUTHENTICATING,
     ];
 
+    // Capture which sessions were connected before this restart BEFORE we reset
+    // them, so we can auto-reconnect the ones that were fully ready.
+    const previouslyActive = await this.sessionRepository.find({
+      where: { status: In(activeStatuses) },
+    });
+
+    // Engines do not survive a process restart, so reset everything to a clean
+    // disconnected state first.
     const result = await this.sessionRepository.update(
       { status: In(activeStatuses) },
       { status: SessionStatus.DISCONNECTED },
@@ -95,6 +103,32 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
         action: 'startup_reset',
         affected: result.affected,
       });
+    }
+
+    // Auto-reconnect sessions that were READY before the restart. LocalAuth is
+    // persisted on disk, so these reconnect without needing a new QR scan.
+    // Disable with SESSION_AUTO_RECONNECT=false.
+    if (process.env.SESSION_AUTO_RECONNECT === 'false') return;
+
+    const toReconnect = previouslyActive.filter(s => s.status === SessionStatus.READY);
+    if (toReconnect.length === 0) return;
+
+    this.logger.log(`Auto-reconnecting ${toReconnect.length} session(s) after restart`, {
+      action: 'auto_reconnect',
+      count: toReconnect.length,
+    });
+
+    // Stagger starts so we don't launch every Chromium instance at once, and
+    // defer past bootstrap so the rest of the app is ready first.
+    let delay = 3000;
+    for (const session of toReconnect) {
+      const sessionId = session.id;
+      setTimeout(() => {
+        void this.start(sessionId).catch(err =>
+          this.logger.error(`Auto-reconnect failed for session ${sessionId}`, String(err)),
+        );
+      }, delay);
+      delay += 4000;
     }
   }
 
