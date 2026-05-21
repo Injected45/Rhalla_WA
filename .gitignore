@@ -72,3 +72,6 @@ uploads/
 docs/plans/
 CLAUDE.md
 _docs/
+
+# Local data backups (contain DBs/keys - never commit)
+data_backup_*/
