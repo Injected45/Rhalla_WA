@@ -35,7 +35,8 @@ export interface IncomingMessage {
   media?: {
     mimetype: string;
     filename?: string;
-    data?: string; // base64
+    data?: string; // base64 (omitted when uploaded to storage)
+    url?: string; // presigned storage URL when media is uploaded to S3
   };
   quotedMessage?: {
     id: string;

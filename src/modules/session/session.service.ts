@@ -12,8 +12,9 @@ import { Session, SessionStatus } from './entities/session.entity';
 import { Message, MessageDirection, MessageStatus } from '../message/entities/message.entity';
 import { CreateSessionDto } from './dto';
 import { EngineFactory } from '../../engine/engine.factory';
-import { IWhatsAppEngine, EngineStatus } from '../../engine/interfaces/whatsapp-engine.interface';
+import { IWhatsAppEngine, EngineStatus, IncomingMessage } from '../../engine/interfaces/whatsapp-engine.interface';
 import { createLogger } from '../../common/services/logger.service';
+import { StorageService } from '../../common/storage/storage.service';
 import { EventsGateway } from '../events/events.gateway';
 import { WebhookService } from '../webhook/webhook.service';
 import { HookManager } from '../../core/hooks';
@@ -46,7 +47,31 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
     private readonly eventsGateway: EventsGateway,
     private readonly webhookService: WebhookService,
     private readonly hookManager: HookManager,
+    private readonly storageService: StorageService,
   ) {}
+
+  /**
+   * If a message carries media, upload it to storage (S3) and replace the
+   * inline base64 with a presigned URL. No-op when S3 isn't the active
+   * backend (the base64 data is then left in place).
+   */
+  private async uploadMessageMedia(sessionId: string, message: IncomingMessage): Promise<void> {
+    const media = message.media;
+    if (!media?.data) return;
+    try {
+      const buffer = Buffer.from(media.data, 'base64');
+      const ext = media.filename?.split('.').pop() || media.mimetype?.split('/')[1] || 'bin';
+      const safeId = (message.id || `${Date.now()}`).replace(/[^a-zA-Z0-9]/g, '_');
+      const key = `media/${sessionId}/${safeId}.${ext}`;
+      const url = await this.storageService.uploadMedia(key, buffer, media.mimetype);
+      if (url) {
+        media.url = url;
+        delete media.data; // URL-only: drop the base64 to keep payloads small
+      }
+    } catch (err) {
+      this.logger.error('Failed to upload message media', String(err));
+    }
+  }
 
   /**
    * On backend startup, reset all active session statuses to disconnected
@@ -286,67 +311,74 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
         });
       },
       onMessage: (message): void => {
-        this.logger.debug(`Message received from ${message.from}`, {
-          sessionId: id,
-          messageId: message.id,
-          from: message.from,
-          action: 'message_received',
-        });
-        // Update last active timestamp
-        void this.sessionRepository.update(id, { lastActiveAt: new Date() });
-        // Persist the incoming message so it shows in message history
-        // (outgoing API sends are persisted separately by MessageService).
-        void this.messageRepository
-          .save(
-            this.messageRepository.create({
-              sessionId: id,
-              waMessageId: message.id,
-              chatId: message.chatId,
-              from: message.from,
-              to: message.to,
-              body: message.body,
-              type: message.type,
-              direction: MessageDirection.INCOMING,
-              status: MessageStatus.DELIVERED,
-              timestamp: message.timestamp,
-            }),
-          )
-          .catch(err => this.logger.error('Failed to persist incoming message', String(err)));
-        // Convert IncomingMessage to plain object for dispatch
-        const messageData = { ...message };
-
-        // Execute hook for message received - plugins can modify or stop processing
-        void this.hookManager
-          .execute('message:received', messageData, {
+        void (async () => {
+          this.logger.debug(`Message received from ${message.from}`, {
             sessionId: id,
-            source: 'Engine',
-          })
-          .then(({ continue: shouldContinue, data: finalMessage }) => {
-            if (!shouldContinue) {
-              // Plugin stopped processing (e.g., auto-reply handled it)
-              return;
-            }
-
-            // Dispatch to webhooks with potentially modified message
-            void this.webhookService.dispatch(id, 'message.received', finalMessage as Record<string, unknown>);
-            // Emit real-time event to WebSocket clients
-            this.eventsGateway.emitMessage(id, finalMessage as Record<string, unknown>);
+            messageId: message.id,
+            from: message.from,
+            action: 'message_received',
           });
+          // Update last active timestamp
+          void this.sessionRepository.update(id, { lastActiveAt: new Date() });
+          // Upload any media to storage (replaces base64 with a presigned URL)
+          // before persisting/dispatching so webhooks carry the URL, not base64.
+          await this.uploadMessageMedia(id, message);
+          // Persist the incoming message so it shows in message history
+          // (outgoing API sends are persisted separately by MessageService).
+          void this.messageRepository
+            .save(
+              this.messageRepository.create({
+                sessionId: id,
+                waMessageId: message.id,
+                chatId: message.chatId,
+                from: message.from,
+                to: message.to,
+                body: message.body,
+                type: message.type,
+                direction: MessageDirection.INCOMING,
+                status: MessageStatus.DELIVERED,
+                timestamp: message.timestamp,
+                metadata: message.media ? { media: message.media } : undefined,
+              }),
+            )
+            .catch(err => this.logger.error('Failed to persist incoming message', String(err)));
+          // Convert IncomingMessage to plain object for dispatch
+          const messageData = { ...message };
+
+          // Execute hook for message received - plugins can modify or stop processing
+          const { continue: shouldContinue, data: finalMessage } = await this.hookManager.execute(
+            'message:received',
+            messageData,
+            { sessionId: id, source: 'Engine' },
+          );
+          if (!shouldContinue) {
+            // Plugin stopped processing (e.g., auto-reply handled it)
+            return;
+          }
+          // Dispatch to webhooks with potentially modified message
+          void this.webhookService.dispatch(id, 'message.received', finalMessage as Record<string, unknown>);
+          // Emit real-time event to WebSocket clients
+          this.eventsGateway.emitMessage(id, finalMessage as Record<string, unknown>);
+        })();
       },
       onMessageSent: (message): void => {
-        this.logger.debug(`Message sent to ${message.chatId}`, {
-          sessionId: id,
-          messageId: message.id,
-          to: message.to,
-          action: 'message_sent',
-        });
-        // Update last active timestamp
-        void this.sessionRepository.update(id, { lastActiveAt: new Date() });
-        const messageData = { ...message };
-        // Dispatch outgoing message to webhooks (covers API sends and phone sends)
-        void this.webhookService.dispatch(id, 'message.sent', messageData as Record<string, unknown>);
-        // Emit real-time event to WebSocket clients
-        this.eventsGateway.emitMessage(id, messageData as Record<string, unknown>);
+        void (async () => {
+          this.logger.debug(`Message sent to ${message.chatId}`, {
+            sessionId: id,
+            messageId: message.id,
+            to: message.to,
+            action: 'message_sent',
+          });
+          // Update last active timestamp
+          void this.sessionRepository.update(id, { lastActiveAt: new Date() });
+          // Upload media to storage (presigned URL) before dispatch
+          await this.uploadMessageMedia(id, message);
+          const messageData = { ...message };
+          // Dispatch outgoing message to webhooks (covers API sends and phone sends)
+          void this.webhookService.dispatch(id, 'message.sent', messageData as Record<string, unknown>);
+          // Emit real-time event to WebSocket clients
+          this.eventsGateway.emitMessage(id, messageData as Record<string, unknown>);
+        })();
       },
       onDisconnected: (reason: string): void => {
         this.logger.warn(`Session disconnected: ${reason}`, {

@@ -14,6 +14,7 @@ import {
   HeadBucketCommand,
   CreateBucketCommand,
 } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { createLogger } from '../services/logger.service';
 
 interface S3Config {
@@ -100,6 +101,34 @@ export class StorageService {
 
   isS3Available(): boolean {
     return this.s3Available;
+  }
+
+  /**
+   * Upload media to S3 and return a presigned GET URL (valid 7 days).
+   * Returns null when S3 is not the active/available storage backend, so
+   * callers can fall back to inlining the raw data.
+   */
+  async uploadMedia(key: string, data: Buffer, contentType?: string): Promise<string | null> {
+    if (this.storageType !== 's3' || !this.s3Client || !this.s3Available) {
+      return null;
+    }
+    try {
+      await this.s3Client.send(
+        new PutObjectCommand({
+          Bucket: this.s3Bucket,
+          Key: key,
+          Body: data,
+          ContentType: contentType,
+        }),
+      );
+      // Presigned URL so the bucket can stay private. Max SigV4 lifetime is 7 days.
+      return await getSignedUrl(this.s3Client, new GetObjectCommand({ Bucket: this.s3Bucket, Key: key }), {
+        expiresIn: 7 * 24 * 60 * 60,
+      });
+    } catch (error) {
+      this.logger.error('Failed to upload media to S3', String(error));
+      return null;
+    }
   }
 
   async listFiles(): Promise<string[]> {
