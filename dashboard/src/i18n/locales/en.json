@@ -59,9 +59,37 @@
     "webhooks": "Webhooks",
     "apiKeys": "API Keys",
     "messageTester": "Message Tester",
+    "messages": "Messages",
     "infrastructure": "Infrastructure",
     "plugins": "Plugins",
     "logs": "Logs"
+  },
+  "messages": {
+    "title": "Messages",
+    "subtitle": "Incoming and sent messages per session",
+    "refresh": "Refresh",
+    "noSessions": "No sessions",
+    "filter": {
+      "all": "All directions",
+      "incoming": "Incoming",
+      "outgoing": "Sent"
+    },
+    "direction": {
+      "incoming": "Incoming",
+      "outgoing": "Sent"
+    },
+    "columns": {
+      "time": "Time",
+      "direction": "Direction",
+      "from": "From",
+      "to": "To",
+      "type": "Type",
+      "body": "Message"
+    },
+    "empty": {
+      "title": "No messages yet",
+      "description": "Incoming and sent messages for this session will appear here."
+    }
   },
   "errorBoundary": {
     "title": "Something went wrong",

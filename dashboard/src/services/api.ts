@@ -290,7 +290,30 @@ export const messageApi = {
       method: 'POST',
       body: JSON.stringify({ chatId, url, filename }),
     }),
+  history: (sessionId: string, params: { limit?: number; offset?: number; chatId?: string } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.limit != null) qs.set('limit', String(params.limit));
+    if (params.offset != null) qs.set('offset', String(params.offset));
+    if (params.chatId) qs.set('chatId', params.chatId);
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return request<{ messages: MessageRecord[]; total: number }>(`/sessions/${sessionId}/messages${suffix}`);
+  },
 };
+
+export interface MessageRecord {
+  id: string;
+  sessionId: string;
+  waMessageId?: string;
+  chatId: string;
+  from: string;
+  to: string;
+  body: string;
+  type: string;
+  direction: 'incoming' | 'outgoing';
+  status: string;
+  timestamp?: number;
+  createdAt: string;
+}
 
 // =============================================================================
 // Health & Infrastructure API

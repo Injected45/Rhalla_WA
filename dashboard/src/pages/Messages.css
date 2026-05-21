@@ -1,0 +1,210 @@
+.messages-page {
+  padding: 2rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.messages-page .btn-secondary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  background: var(--bg-white);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.messages-page .btn-secondary:hover:not(:disabled) {
+  background: var(--bg-light);
+}
+
+.messages-page .btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.messages-page .filters-bar {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.messages-page .filter-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 1rem;
+  background: var(--bg-white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.messages-page .filter-group select {
+  padding: 0.75rem 0;
+  border: none;
+  background: none;
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+  cursor: pointer;
+  min-width: 160px;
+}
+
+.messages-page .filter-group select:focus {
+  outline: none;
+}
+
+.messages-table-container {
+  background: var(--bg-white);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
+  overflow-x: auto;
+}
+
+.messages-table {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  font-size: 0.875rem;
+}
+
+.messages-table .table-row {
+  display: grid;
+  grid-template-columns: 170px 120px 140px 140px 90px 1fr;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+}
+
+.messages-table .table-row:last-child {
+  border-bottom: none;
+}
+
+.messages-table .table-row.header {
+  background: var(--bg-light);
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.messages-table .table-row:not(.header):hover {
+  background: rgba(0, 177, 122, 0.05);
+}
+
+.messages-table .timestamp {
+  font-family: monospace;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.messages-table .jid {
+  font-family: monospace;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+  color: var(--text-primary);
+}
+
+.messages-table .body {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.direction-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 6px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  white-space: nowrap;
+}
+
+.direction-badge.incoming {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.direction-badge.outgoing {
+  background: #d1fae5;
+  color: #047857;
+}
+
+.type-badge {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  background: var(--bg-light);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
+.empty-table-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.empty-table-state svg {
+  margin-bottom: 1rem;
+  opacity: 0.4;
+  color: var(--text-muted);
+}
+
+.empty-table-state h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 0 0 0.5rem;
+}
+
+.empty-table-state p {
+  margin: 0;
+  font-size: 0.875rem;
+  max-width: 320px;
+}
+
+@media (max-width: 768px) {
+  .messages-page {
+    padding: 1rem;
+  }
+
+  .messages-page .filters-bar {
+    flex-direction: column;
+  }
+
+  .messages-page .filter-group {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .messages-table-container {
+    overflow-x: auto;
+  }
+
+  .messages-table .table-row {
+    grid-template-columns: 150px 110px 130px 130px 80px 1fr;
+    min-width: 700px;
+  }
+}

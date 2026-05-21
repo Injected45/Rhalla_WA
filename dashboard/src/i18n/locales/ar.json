@@ -59,9 +59,37 @@
     "webhooks": "الويب هوك",
     "apiKeys": "مفاتيح API",
     "messageTester": "اختبار الرسائل",
+    "messages": "الرسائل",
     "infrastructure": "البنية التحتية",
     "plugins": "الإضافات",
     "logs": "السجلات"
+  },
+  "messages": {
+    "title": "الرسائل",
+    "subtitle": "الرسائل الواردة والمُرسَلة لكل جلسة",
+    "refresh": "تحديث",
+    "noSessions": "لا توجد جلسات",
+    "filter": {
+      "all": "كل الاتجاهات",
+      "incoming": "واردة",
+      "outgoing": "مُرسَلة"
+    },
+    "direction": {
+      "incoming": "واردة",
+      "outgoing": "مُرسَلة"
+    },
+    "columns": {
+      "time": "الوقت",
+      "direction": "الاتجاه",
+      "from": "من",
+      "to": "إلى",
+      "type": "النوع",
+      "body": "الرسالة"
+    },
+    "empty": {
+      "title": "لا توجد رسائل بعد",
+      "description": "ستظهر هنا الرسائل الواردة والمُرسَلة لهذه الجلسة."
+    }
   },
   "errorBoundary": {
     "title": "حدث خطأ ما",

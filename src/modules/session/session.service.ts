@@ -9,6 +9,7 @@ import {
 import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
 import { Repository, In, DataSource } from 'typeorm';
 import { Session, SessionStatus } from './entities/session.entity';
+import { Message, MessageDirection, MessageStatus } from '../message/entities/message.entity';
 import { CreateSessionDto } from './dto';
 import { EngineFactory } from '../../engine/engine.factory';
 import { IWhatsAppEngine, EngineStatus } from '../../engine/interfaces/whatsapp-engine.interface';
@@ -37,6 +38,8 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
   constructor(
     @InjectRepository(Session, 'data')
     private readonly sessionRepository: Repository<Session>,
+    @InjectRepository(Message, 'data')
+    private readonly messageRepository: Repository<Message>,
     @InjectDataSource('data')
     private readonly dataSource: DataSource,
     private readonly engineFactory: EngineFactory,
@@ -291,6 +294,24 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
         });
         // Update last active timestamp
         void this.sessionRepository.update(id, { lastActiveAt: new Date() });
+        // Persist the incoming message so it shows in message history
+        // (outgoing API sends are persisted separately by MessageService).
+        void this.messageRepository
+          .save(
+            this.messageRepository.create({
+              sessionId: id,
+              waMessageId: message.id,
+              chatId: message.chatId,
+              from: message.from,
+              to: message.to,
+              body: message.body,
+              type: message.type,
+              direction: MessageDirection.INCOMING,
+              status: MessageStatus.DELIVERED,
+              timestamp: message.timestamp,
+            }),
+          )
+          .catch(err => this.logger.error('Failed to persist incoming message', String(err)));
         // Convert IncomingMessage to plain object for dispatch
         const messageData = { ...message };
 
@@ -311,6 +332,21 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
             // Emit real-time event to WebSocket clients
             this.eventsGateway.emitMessage(id, finalMessage as Record<string, unknown>);
           });
+      },
+      onMessageSent: (message): void => {
+        this.logger.debug(`Message sent to ${message.chatId}`, {
+          sessionId: id,
+          messageId: message.id,
+          to: message.to,
+          action: 'message_sent',
+        });
+        // Update last active timestamp
+        void this.sessionRepository.update(id, { lastActiveAt: new Date() });
+        const messageData = { ...message };
+        // Dispatch outgoing message to webhooks (covers API sends and phone sends)
+        void this.webhookService.dispatch(id, 'message.sent', messageData as Record<string, unknown>);
+        // Emit real-time event to WebSocket clients
+        this.eventsGateway.emitMessage(id, messageData as Record<string, unknown>);
       },
       onDisconnected: (reason: string): void => {
         this.logger.warn(`Session disconnected: ${reason}`, {

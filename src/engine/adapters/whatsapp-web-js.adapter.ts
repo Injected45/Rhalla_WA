@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { Client, LocalAuth, MessageMedia } from 'whatsapp-web.js';
+import { Client, LocalAuth, MessageMedia, Message } from 'whatsapp-web.js';
 import * as qrcode from 'qrcode';
 import * as path from 'path';
 import {
@@ -143,50 +143,23 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
     // eslint-disable-next-line @typescript-eslint/no-misused-promises
     this.client.on('message', async msg => {
       try {
-        const incomingMessage: IncomingMessage = {
-          id: msg.id._serialized,
-          from: msg.from,
-          to: msg.to,
-          chatId: msg.from,
-          body: msg.body,
-          type: msg.type,
-          timestamp: msg.timestamp,
-          fromMe: msg.fromMe,
-          isGroup: msg.from.endsWith('@g.us'),
-        };
-
-        // Handle media
-        if (msg.hasMedia) {
-          try {
-            const media = await msg.downloadMedia();
-            if (media) {
-              incomingMessage.media = {
-                mimetype: media.mimetype,
-                filename: media.filename || undefined,
-                data: media.data,
-              };
-            }
-          } catch (error) {
-            this.logger.error('Error downloading media', String(error));
-          }
-        }
-
-        // Handle quoted message
-        if (msg.hasQuotedMsg) {
-          try {
-            const quoted = await msg.getQuotedMessage();
-            incomingMessage.quotedMessage = {
-              id: quoted.id._serialized,
-              body: quoted.body,
-            };
-          } catch (error) {
-            this.logger.error('Error getting quoted message', String(error));
-          }
-        }
-
+        const incomingMessage = await this.toIncomingMessage(msg);
         this.callbacks.onMessage?.(incomingMessage);
       } catch (error) {
         this.logger.error('Error processing incoming message', String(error));
+      }
+    });
+
+    // 'message_create' fires for EVERY message, including ones sent by this
+    // account (via the API or the linked phone). We forward only outgoing
+    // messages here; incoming ones are already handled by 'message' above.
+    this.client.on('message_create', async msg => {
+      if (!msg.fromMe) return;
+      try {
+        const sentMessage = await this.toIncomingMessage(msg);
+        this.callbacks.onMessageSent?.(sentMessage);
+      } catch (error) {
+        this.logger.error('Error processing sent message', String(error));
       }
     });
 
@@ -203,6 +176,59 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
       this.setStatus(EngineStatus.FAILED);
       this.callbacks.onDisconnected?.('Authentication failed');
     });
+  }
+
+  /**
+   * Build a normalized message object from a whatsapp-web.js Message.
+   * Used for both incoming ('message') and outgoing ('message_create') events.
+   */
+  private async toIncomingMessage(msg: Message): Promise<IncomingMessage> {
+    // For outgoing messages the relevant chat is the recipient (msg.to);
+    // for incoming it's the sender (msg.from).
+    const chatTarget = msg.fromMe ? msg.to : msg.from;
+
+    const incomingMessage: IncomingMessage = {
+      id: msg.id._serialized,
+      from: msg.from,
+      to: msg.to,
+      chatId: chatTarget,
+      body: msg.body,
+      type: msg.type,
+      timestamp: msg.timestamp,
+      fromMe: msg.fromMe,
+      isGroup: chatTarget.endsWith('@g.us'),
+    };
+
+    // Handle media
+    if (msg.hasMedia) {
+      try {
+        const media = await msg.downloadMedia();
+        if (media) {
+          incomingMessage.media = {
+            mimetype: media.mimetype,
+            filename: media.filename || undefined,
+            data: media.data,
+          };
+        }
+      } catch (error) {
+        this.logger.error('Error downloading media', String(error));
+      }
+    }
+
+    // Handle quoted message
+    if (msg.hasQuotedMsg) {
+      try {
+        const quoted = await msg.getQuotedMessage();
+        incomingMessage.quotedMessage = {
+          id: quoted.id._serialized,
+          body: quoted.body,
+        };
+      } catch (error) {
+        this.logger.error('Error getting quoted message', String(error));
+      }
+    }
+
+    return incomingMessage;
   }
 
   private setStatus(status: EngineStatus): void {
