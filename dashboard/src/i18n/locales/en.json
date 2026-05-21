@@ -69,6 +69,7 @@
     "subtitle": "Incoming and sent messages per session",
     "refresh": "Refresh",
     "noSessions": "No sessions",
+    "viewMedia": "View media",
     "filter": {
       "all": "All directions",
       "incoming": "Incoming",

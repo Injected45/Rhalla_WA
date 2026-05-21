@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { RefreshCw, Loader2, MessageSquare, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
+import { RefreshCw, Loader2, MessageSquare, ArrowDownLeft, ArrowUpRight, Paperclip } from 'lucide-react';
 import { messageApi, type MessageRecord } from '../services/api';
 import { useSessionsQuery } from '../hooks/queries';
 import { useWebSocket } from '../hooks/useWebSocket';
@@ -55,6 +55,7 @@ export function Messages() {
         type?: string;
         fromMe?: boolean;
         timestamp?: number;
+        media?: { mimetype?: string; filename?: string; url?: string };
       };
       const record: MessageRecord = {
         id: String(m.id ?? `${Date.now()}-${Math.random()}`),
@@ -69,6 +70,7 @@ export function Messages() {
         status: m.fromMe ? 'sent' : 'delivered',
         timestamp: m.timestamp,
         createdAt: new Date().toISOString(),
+        metadata: m.media ? { media: m.media } : undefined,
       };
       setMessages(prev => {
         if (record.waMessageId && prev.some(p => p.waMessageId === record.waMessageId)) return prev;
@@ -81,6 +83,26 @@ export function Messages() {
   const formatTime = (m: MessageRecord) =>
     new Date(m.timestamp ? m.timestamp * 1000 : m.createdAt).toLocaleString();
   const numberOf = (jid: string) => (jid || '').replace(/@.*/, '') || '—';
+
+  const renderBody = (m: MessageRecord) => {
+    const media = m.metadata?.media;
+    if (media?.url) {
+      const isImage = (media.mimetype || '').startsWith('image/');
+      return (
+        <a className="media-link" href={media.url} target="_blank" rel="noreferrer" title={media.filename || media.url}>
+          {isImage ? (
+            <img className="media-thumb" src={media.url} alt={media.filename || 'media'} loading="lazy" />
+          ) : (
+            <>
+              <Paperclip size={14} />
+              {media.filename || t('messages.viewMedia')}
+            </>
+          )}
+        </a>
+      );
+    }
+    return m.body || '—';
+  };
 
   return (
     <div className="messages-page">
@@ -152,7 +174,7 @@ export function Messages() {
                   <span className="type-badge">{m.type}</span>
                 </span>
                 <span className="body" title={m.body}>
-                  {m.body || '—'}
+                  {renderBody(m)}
                 </span>
               </div>
             ))

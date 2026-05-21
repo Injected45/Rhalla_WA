@@ -300,6 +300,12 @@ export const messageApi = {
   },
 };
 
+export interface MessageMediaInfo {
+  mimetype?: string;
+  filename?: string;
+  url?: string;
+}
+
 export interface MessageRecord {
   id: string;
   sessionId: string;
@@ -313,6 +319,7 @@ export interface MessageRecord {
   status: string;
   timestamp?: number;
   createdAt: string;
+  metadata?: { media?: MessageMediaInfo } | null;
 }
 
 // =============================================================================
