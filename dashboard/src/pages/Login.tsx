@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Eye, EyeOff, Github } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 import './Login.css';
 
 interface LoginProps {
@@ -9,34 +9,42 @@ interface LoginProps {
 
 export function Login({ onLogin }: LoginProps) {
   const { t } = useTranslation();
-  const [apiKey, setApiKey] = useState('');
-  const [showKey, setShowKey] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!apiKey.trim()) {
-      setError(t('login.apiKeyRequired'));
+    if (!email.trim()) {
+      setError(t('login.emailRequired'));
+      return;
+    }
+    if (!password.trim()) {
+      setError(t('login.passwordRequired'));
       return;
     }
     setIsLoading(true);
     setError('');
 
     try {
-      const response = await fetch('/api/auth/validate', {
+      const response = await fetch('/api/auth/login', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': apiKey,
-        },
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password }),
       });
 
       if (response.ok) {
-        onLogin(apiKey);
+        const data = await response.json();
+        if (data?.apiKey) {
+          onLogin(data.apiKey);
+        } else {
+          setError(t('login.invalidCredentials'));
+        }
       } else {
         const errorData = await response.json().catch(() => ({}));
-        setError(errorData.message || t('login.invalidKey'));
+        setError(errorData.message || t('login.invalidCredentials'));
       }
     } catch {
       setError(t('login.connectionError'));
@@ -49,7 +57,7 @@ export function Login({ onLogin }: LoginProps) {
     <div className="login-container">
       <div className="login-card">
         <div className="login-logo">
-          <img src="/openwa_logo.webp" alt="OpenWA" className="logo-icon" />
+          <img src="/rhalla-logo.svg" alt="Rhalla Wa" className="logo-icon" />
           <span className="version-info">
             {t('login.version', {
               version: __APP_VERSION__,
@@ -59,18 +67,34 @@ export function Login({ onLogin }: LoginProps) {
         </div>
         <form onSubmit={handleSubmit} className="login-form">
           <div className="input-group">
-            <label htmlFor="apiKey">{t('login.apiKey')}</label>
+            <label htmlFor="email">{t('login.email')}</label>
             <div className="input-wrapper">
               <input
-                id="apiKey"
-                type={showKey ? 'text' : 'password'}
-                value={apiKey}
-                onChange={e => setApiKey(e.target.value)}
-                placeholder={t('login.apiKeyPlaceholder')}
+                id="email"
+                type="email"
+                autoComplete="username"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder={t('login.emailPlaceholder')}
                 className={error ? 'error' : ''}
               />
-              <button type="button" className="toggle-visibility" onClick={() => setShowKey(!showKey)}>
-                {showKey ? <EyeOff size={20} /> : <Eye size={20} />}
+            </div>
+          </div>
+
+          <div className="input-group">
+            <label htmlFor="password">{t('login.password')}</label>
+            <div className="input-wrapper">
+              <input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder={t('login.passwordPlaceholder')}
+                className={error ? 'error' : ''}
+              />
+              <button type="button" className="toggle-visibility" onClick={() => setShowPassword(!showPassword)}>
+                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
               </button>
             </div>
             {error && <span className="error-message">{error}</span>}
@@ -80,29 +104,10 @@ export function Login({ onLogin }: LoginProps) {
             {isLoading ? t('login.connecting') : t('login.connect')}
           </button>
         </form>
-
-        <p className="login-help">
-          {t('login.help')}{' '}
-          <a
-            href="https://github.com/rmyndharis/OpenWA/blob/main/docs/01-project-overview.md"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {t('login.viewDocs')}
-          </a>
-        </p>
       </div>
 
       <footer className="login-footer">
         <span>{t('login.footer')}</span>
-        <a
-          href="https://github.com/rmyndharis/OpenWA"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="github-link"
-        >
-          <Github size={18} />
-        </a>
       </footer>
     </div>
   );

@@ -1,6 +1,6 @@
 {
   "common": {
-    "appName": "OpenWA",
+    "appName": "Rhalla Wa",
     "appSubtitle": "واجهة برمجة واتساب",
     "loading": "جارٍ التحميل...",
     "save": "حفظ",
@@ -69,16 +69,17 @@
     "reload": "إعادة تحميل لوحة التحكم"
   },
   "login": {
-    "apiKey": "مفتاح API",
-    "apiKeyPlaceholder": "أدخل مفتاح API الخاص بك",
-    "apiKeyRequired": "مفتاح API مطلوب",
-    "connect": "اتصال",
-    "connecting": "جارٍ الاتصال...",
-    "invalidKey": "مفتاح API غير صالح",
+    "email": "البريد الإلكتروني",
+    "emailPlaceholder": "أدخل بريدك الإلكتروني",
+    "emailRequired": "البريد الإلكتروني مطلوب",
+    "password": "كلمة المرور",
+    "passwordPlaceholder": "أدخل كلمة المرور",
+    "passwordRequired": "كلمة المرور مطلوبة",
+    "invalidCredentials": "البريد الإلكتروني أو كلمة المرور غير صحيحة",
+    "connect": "تسجيل الدخول",
+    "connecting": "جارٍ تسجيل الدخول...",
     "connectionError": "تعذّر الاتصال بالخادم. يُرجى المحاولة مرة أخرى.",
-    "help": "تحتاج مساعدة؟",
-    "viewDocs": "عرض الوثائق",
-    "footer": "صُنع بحب بواسطة Yudhi Armyndharis ومجتمع OpenWA",
+    "footer": "Rhalla Wa · بوابة واجهة برمجة واتساب",
     "version": "إصدار {{version}} · {{date}}"
   },
   "dashboard": {

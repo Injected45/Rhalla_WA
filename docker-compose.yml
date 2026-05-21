@@ -70,6 +70,9 @@ services:
       - PLUGINS_DIR=/app/data/plugins
       # Security
       - API_MASTER_KEY=${API_MASTER_KEY:-}
+      # Dashboard login credentials
+      - DASHBOARD_EMAIL=${DASHBOARD_EMAIL:-admin@rhalla.wa}
+      - DASHBOARD_PASSWORD=${DASHBOARD_PASSWORD:-changeme}
     volumes:
       - openwa-data:/app/data
       - /var/run/docker.sock:/var/run/docker.sock:ro

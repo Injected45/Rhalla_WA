@@ -1,6 +1,6 @@
 {
   "common": {
-    "appName": "OpenWA",
+    "appName": "Rhalla Wa",
     "appSubtitle": "WhatsApp API",
     "loading": "Loading...",
     "save": "Save",
@@ -69,16 +69,17 @@
     "reload": "Reload Dashboard"
   },
   "login": {
-    "apiKey": "API Key",
-    "apiKeyPlaceholder": "Enter your API key",
-    "apiKeyRequired": "API key is required",
-    "connect": "Connect",
-    "connecting": "Connecting...",
-    "invalidKey": "Invalid API key",
+    "email": "Email",
+    "emailPlaceholder": "Enter your email",
+    "emailRequired": "Email is required",
+    "password": "Password",
+    "passwordPlaceholder": "Enter your password",
+    "passwordRequired": "Password is required",
+    "invalidCredentials": "Invalid email or password",
+    "connect": "Sign In",
+    "connecting": "Signing in...",
     "connectionError": "Unable to connect to server. Please try again.",
-    "help": "Need help?",
-    "viewDocs": "View Documentation",
-    "footer": "Made with ❤️ by Yudhi Armyndharis and the OpenWA Community",
+    "footer": "Rhalla Wa · WhatsApp API Gateway",
     "version": "v{{version}} · {{date}}"
   },
   "dashboard": {

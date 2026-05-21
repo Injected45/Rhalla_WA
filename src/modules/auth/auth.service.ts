@@ -157,6 +157,37 @@ export class AuthService implements OnModuleInit {
     return this.apiKeyRepository.save(apiKey);
   }
 
+  /**
+   * Returns the admin API key the dashboard should use after a successful
+   * email/password login. The raw key is written to API_KEY_FILE on first boot.
+   */
+  getDashboardKey(): string {
+    if (existsSync(API_KEY_FILE)) {
+      const key = readFileSync(API_KEY_FILE, 'utf-8').trim();
+      if (key) return key;
+    }
+    throw new UnauthorizedException('Dashboard key unavailable. Check server logs for the API key.');
+  }
+
+  /**
+   * Validate dashboard email/password against env-configured credentials.
+   * On success returns the admin API key for the dashboard session.
+   */
+  loginWithCredentials(email: string, password: string): { apiKey: string } {
+    const expectedEmail = (process.env.DASHBOARD_EMAIL || 'admin@rhalla.wa').trim().toLowerCase();
+    const expectedPassword = process.env.DASHBOARD_PASSWORD || 'changeme';
+
+    const emailOk = email.trim().toLowerCase() === expectedEmail;
+    const passwordOk = password === expectedPassword;
+
+    if (!emailOk || !passwordOk) {
+      this.logger.warn('Dashboard login failed', { action: 'dashboard_login_failed' });
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    return { apiKey: this.getDashboardKey() };
+  }
+
   async validateApiKey(rawKey: string, clientIp?: string, sessionId?: string): Promise<ApiKey> {
     const keyHash = this.hashKey(rawKey);
     const apiKey = await this.apiKeyRepository.findOne({ where: { keyHash } });
