@@ -1,0 +1,100 @@
+{
+  "info": {
+    "name": "Rhalla WA (OpenWA) API",
+    "description": "WhatsApp API Gateway. Set the collection variables: baseUrl, apiKey, sessionId, chatId, groupId, number. Auth is sent automatically as the X-API-Key header on every request.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      { "key": "key", "value": "X-API-Key", "type": "string" },
+      { "key": "value", "value": "{{apiKey}}", "type": "string" },
+      { "key": "in", "value": "header", "type": "string" }
+    ]
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "https://wa.rhalla.online/api" },
+    { "key": "apiKey", "value": "owa_k1_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" },
+    { "key": "sessionId", "value": "" },
+    { "key": "chatId", "value": "201234567890@c.us" },
+    { "key": "groupId", "value": "120363000000000000@g.us" },
+    { "key": "number", "value": "201234567890" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        { "name": "Health check", "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] } } },
+        { "name": "Readiness", "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/health/ready", "host": ["{{baseUrl}}"], "path": ["health", "ready"] } } }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        { "name": "Dashboard login (email/password)", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"admin@rhalla.wa\",\n  \"password\": \"changeme\"\n}" }, "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] } } },
+        { "name": "Validate API key", "request": { "method": "POST", "header": [], "url": { "raw": "{{baseUrl}}/auth/validate", "host": ["{{baseUrl}}"], "path": ["auth", "validate"] } } },
+        { "name": "List API keys", "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/auth/api-keys", "host": ["{{baseUrl}}"], "path": ["auth", "api-keys"] } } },
+        { "name": "Create API key", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"name\": \"My integration key\",\n  \"role\": \"admin\"\n}" }, "url": { "raw": "{{baseUrl}}/auth/api-keys", "host": ["{{baseUrl}}"], "path": ["auth", "api-keys"] } } },
+        { "name": "Revoke API key", "request": { "method": "POST", "header": [], "url": { "raw": "{{baseUrl}}/auth/api-keys/:id/revoke", "host": ["{{baseUrl}}"], "path": ["auth", "api-keys", ":id", "revoke"], "variable": [{ "key": "id", "value": "" }] } } },
+        { "name": "Delete API key", "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/auth/api-keys/:id", "host": ["{{baseUrl}}"], "path": ["auth", "api-keys", ":id"], "variable": [{ "key": "id", "value": "" }] } } }
+      ]
+    },
+    {
+      "name": "Sessions",
+      "item": [
+        { "name": "List sessions", "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/sessions", "host": ["{{baseUrl}}"], "path": ["sessions"] } } },
+        { "name": "Create session", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"name\": \"my-session\"\n}" }, "url": { "raw": "{{baseUrl}}/sessions", "host": ["{{baseUrl}}"], "path": ["sessions"] } } },
+        { "name": "Get session", "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/sessions/{{sessionId}}", "host": ["{{baseUrl}}"], "path": ["sessions", "{{sessionId}}"] } } },
+        { "name": "Start session", "request": { "method": "POST", "header": [], "url": { "raw": "{{baseUrl}}/sessions/{{sessionId}}/start", "host": ["{{baseUrl}}"], "path": ["sessions", "{{sessionId}}", "start"] } } },
+        { "name": "Stop session", "request": { "method": "POST", "header": [], "url": { "raw": "{{baseUrl}}/sessions/{{sessionId}}/stop", "host": ["{{baseUrl}}"], "path": ["sessions", "{{sessionId}}", "stop"] } } },
+        { "name": "Get QR code", "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/sessions/{{sessionId}}/qr", "host": ["{{baseUrl}}"], "path": ["sessions", "{{sessionId}}", "qr"] } } },
+        { "name": "Session stats overview", "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/sessions/stats/overview", "host": ["{{baseUrl}}"], "path": ["sessions", "stats", "overview"] } } },
+        { "name": "Delete session", "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/sessions/{{sessionId}}", "host": ["{{baseUrl}}"], "path": ["sessions", "{{sessionId}}"] } } }
+      ]
+    },
+    {
+      "name": "Messages",
+      "item": [
+        { "name": "Get message history", "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/sessions/{{sessionId}}/messages?limit=50&offset=0", "host": ["{{baseUrl}}"], "path": ["sessions", "{{sessionId}}", "messages"], "query": [{ "key": "limit", "value": "50" }, { "key": "offset", "value": "0" }, { "key": "chatId", "value": "", "disabled": true }] } } },
+        { "name": "Send text", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"chatId\": \"{{chatId}}\",\n  \"text\": \"Hello from Rhalla WA\"\n}" }, "url": { "raw": "{{baseUrl}}/sessions/{{sessionId}}/messages/send-text", "host": ["{{baseUrl}}"], "path": ["sessions", "{{sessionId}}", "messages", "send-text"] } } },
+        { "name": "Send image", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"chatId\": \"{{chatId}}\",\n  \"url\": \"https://picsum.photos/400\",\n  \"caption\": \"An image\"\n}" }, "url": { "raw": "{{baseUrl}}/sessions/{{sessionId}}/messages/send-image", "host": ["{{baseUrl}}"], "path": ["sessions", "{{sessionId}}", "messages", "send-image"] } } },
+        { "name": "Send video", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"chatId\": \"{{chatId}}\",\n  \"url\": \"https://example.com/video.mp4\",\n  \"caption\": \"A video\"\n}" }, "url": { "raw": "{{baseUrl}}/sessions/{{sessionId}}/messages/send-video", "host": ["{{baseUrl}}"], "path": ["sessions", "{{sessionId}}", "messages", "send-video"] } } },
+        { "name": "Send audio", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"chatId\": \"{{chatId}}\",\n  \"url\": \"https://example.com/audio.mp3\"\n}" }, "url": { "raw": "{{baseUrl}}/sessions/{{sessionId}}/messages/send-audio", "host": ["{{baseUrl}}"], "path": ["sessions", "{{sessionId}}", "messages", "send-audio"] } } },
+        { "name": "Send document", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"chatId\": \"{{chatId}}\",\n  \"url\": \"https://example.com/file.pdf\",\n  \"filename\": \"file.pdf\"\n}" }, "url": { "raw": "{{baseUrl}}/sessions/{{sessionId}}/messages/send-document", "host": ["{{baseUrl}}"], "path": ["sessions", "{{sessionId}}", "messages", "send-document"] } } },
+        { "name": "Send location", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"chatId\": \"{{chatId}}\",\n  \"latitude\": 32.8872,\n  \"longitude\": 13.1913,\n  \"description\": \"Tripoli\"\n}" }, "url": { "raw": "{{baseUrl}}/sessions/{{sessionId}}/messages/send-location", "host": ["{{baseUrl}}"], "path": ["sessions", "{{sessionId}}", "messages", "send-location"] } } },
+        { "name": "Reply to message", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"chatId\": \"{{chatId}}\",\n  \"text\": \"Replying\",\n  \"messageId\": \"\"\n}" }, "url": { "raw": "{{baseUrl}}/sessions/{{sessionId}}/messages/reply", "host": ["{{baseUrl}}"], "path": ["sessions", "{{sessionId}}", "messages", "reply"] } } },
+        { "name": "Send bulk", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"messages\": [\n    { \"chatId\": \"{{chatId}}\", \"type\": \"text\", \"content\": { \"text\": \"Bulk 1\" } }\n  ]\n}" }, "url": { "raw": "{{baseUrl}}/sessions/{{sessionId}}/messages/send-bulk", "host": ["{{baseUrl}}"], "path": ["sessions", "{{sessionId}}", "messages", "send-bulk"] } } }
+      ]
+    },
+    {
+      "name": "Contacts",
+      "item": [
+        { "name": "List contacts", "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/sessions/{{sessionId}}/contacts", "host": ["{{baseUrl}}"], "path": ["sessions", "{{sessionId}}", "contacts"] } } },
+        { "name": "Check number on WhatsApp", "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/sessions/{{sessionId}}/contacts/check/{{number}}", "host": ["{{baseUrl}}"], "path": ["sessions", "{{sessionId}}", "contacts", "check", "{{number}}"] } } },
+        { "name": "Get contact", "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/sessions/{{sessionId}}/contacts/{{number}}@c.us", "host": ["{{baseUrl}}"], "path": ["sessions", "{{sessionId}}", "contacts", "{{number}}@c.us"] } } }
+      ]
+    },
+    {
+      "name": "Groups",
+      "item": [
+        { "name": "List groups", "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/sessions/{{sessionId}}/groups", "host": ["{{baseUrl}}"], "path": ["sessions", "{{sessionId}}", "groups"] } } },
+        { "name": "Get group details", "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/sessions/{{sessionId}}/groups/{{groupId}}", "host": ["{{baseUrl}}"], "path": ["sessions", "{{sessionId}}", "groups", "{{groupId}}"] } } },
+        { "name": "Create group", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"name\": \"My Group\",\n  \"participants\": [\"201234567890\"]\n}" }, "url": { "raw": "{{baseUrl}}/sessions/{{sessionId}}/groups", "host": ["{{baseUrl}}"], "path": ["sessions", "{{sessionId}}", "groups"] } } },
+        { "name": "Add participants", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"participants\": [\"201234567890\"]\n}" }, "url": { "raw": "{{baseUrl}}/sessions/{{sessionId}}/groups/{{groupId}}/participants", "host": ["{{baseUrl}}"], "path": ["sessions", "{{sessionId}}", "groups", "{{groupId}}", "participants"] } } },
+        { "name": "Get invite code", "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/sessions/{{sessionId}}/groups/{{groupId}}/invite-code", "host": ["{{baseUrl}}"], "path": ["sessions", "{{sessionId}}", "groups", "{{groupId}}", "invite-code"] } } },
+        { "name": "Leave group", "request": { "method": "POST", "header": [], "url": { "raw": "{{baseUrl}}/sessions/{{sessionId}}/groups/{{groupId}}/leave", "host": ["{{baseUrl}}"], "path": ["sessions", "{{sessionId}}", "groups", "{{groupId}}", "leave"] } } }
+      ]
+    },
+    {
+      "name": "Webhooks",
+      "item": [
+        { "name": "List webhooks (session)", "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/sessions/{{sessionId}}/webhooks", "host": ["{{baseUrl}}"], "path": ["sessions", "{{sessionId}}", "webhooks"] } } },
+        { "name": "List all webhooks", "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/webhooks", "host": ["{{baseUrl}}"], "path": ["webhooks"] } } },
+        { "name": "Create webhook", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"url\": \"https://your-endpoint.example.com/webhook\",\n  \"events\": [\"message.received\", \"message.sent\"]\n}" }, "url": { "raw": "{{baseUrl}}/sessions/{{sessionId}}/webhooks", "host": ["{{baseUrl}}"], "path": ["sessions", "{{sessionId}}", "webhooks"] } } },
+        { "name": "Update webhook", "request": { "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"url\": \"https://your-endpoint.example.com/webhook\",\n  \"events\": [\"message.received\", \"message.sent\"],\n  \"active\": true\n}" }, "url": { "raw": "{{baseUrl}}/sessions/{{sessionId}}/webhooks/:id", "host": ["{{baseUrl}}"], "path": ["sessions", "{{sessionId}}", "webhooks", ":id"], "variable": [{ "key": "id", "value": "" }] } } },
+        { "name": "Test webhook", "request": { "method": "POST", "header": [], "url": { "raw": "{{baseUrl}}/sessions/{{sessionId}}/webhooks/:id/test", "host": ["{{baseUrl}}"], "path": ["sessions", "{{sessionId}}", "webhooks", ":id", "test"], "variable": [{ "key": "id", "value": "" }] } } },
+        { "name": "Delete webhook", "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/sessions/{{sessionId}}/webhooks/:id", "host": ["{{baseUrl}}"], "path": ["sessions", "{{sessionId}}", "webhooks", ":id"], "variable": [{ "key": "id", "value": "" }] } } }
+      ]
+    }
+  ]
+}
