@@ -1,0 +1,248 @@
+.contacts-page {
+  padding: 2rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.contacts-page .filters-bar {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.contacts-page .filter-group {
+  display: flex;
+  align-items: center;
+  padding: 0 1rem;
+  background: var(--bg-white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.contacts-page .filter-group select {
+  padding: 0.75rem 0;
+  border: none;
+  background: none;
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+  cursor: pointer;
+  min-width: 220px;
+}
+
+.contacts-page .filter-group select:focus {
+  outline: none;
+}
+
+.contacts-error {
+  background: #fee2e2;
+  color: #dc2626;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius);
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+}
+
+.contacts-card {
+  background: var(--bg-white);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.contacts-card h2 {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  margin: 0 0 0.25rem;
+  color: var(--text-primary);
+}
+
+.contacts-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.contacts-hint {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  margin: 0.5rem 0 1rem;
+}
+
+.contacts-search-row {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.contacts-search-row input {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.9375rem;
+  font-family: monospace;
+  color: var(--text-primary);
+  background: var(--bg-white);
+}
+
+.contacts-search-row input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.btn-primary,
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-weight: 500;
+  border-radius: var(--radius);
+  transition: all 0.2s;
+}
+
+.btn-primary {
+  padding: 0.75rem 1.25rem;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  font-size: 0.9375rem;
+}
+
+.btn-primary:disabled,
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  padding: 0.625rem 1rem;
+  background: var(--bg-white);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  font-size: 0.875rem;
+}
+
+.check-result {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius);
+  font-size: 0.9375rem;
+  font-weight: 500;
+}
+
+.check-result.ok {
+  background: #d1fae5;
+  color: #047857;
+}
+
+.check-result.no {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.contacts-search-input {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 1rem;
+}
+
+.contacts-search-input svg {
+  color: var(--text-muted);
+}
+
+.contacts-search-input input {
+  flex: 1;
+  border: none;
+  background: none;
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+}
+
+.contacts-search-input input:focus {
+  outline: none;
+}
+
+.contacts-search-input .count {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.contacts-table {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.875rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.contacts-table .table-row {
+  display: grid;
+  grid-template-columns: 180px 1fr 1fr 90px;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+}
+
+.contacts-table .table-row:last-child {
+  border-bottom: none;
+}
+
+.contacts-table .table-row.header {
+  background: var(--bg-light);
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.mono {
+  font-family: monospace;
+  font-size: 0.8125rem;
+}
+
+.empty-table-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5rem 2rem;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.empty-table-state svg {
+  margin-bottom: 0.75rem;
+  opacity: 0.4;
+}
+
+.empty-table-state p {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+@media (max-width: 768px) {
+  .contacts-page {
+    padding: 1rem;
+  }
+  .contacts-table .table-row {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+  }
+  .contacts-table .table-row.header {
+    display: none;
+  }
+}

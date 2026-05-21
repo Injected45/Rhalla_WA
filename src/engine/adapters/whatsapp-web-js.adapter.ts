@@ -418,18 +418,29 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
 
     // Filter only group chats
     const groups = chats.filter(chat => chat.isGroup);
+    const myId = this.client?.info?.wid?._serialized;
 
-    return groups.map(g => {
-      const groupChat = g as unknown as GroupChat;
-      return {
-        id: g.id._serialized,
-        name: g.name,
-        participantsCount: groupChat.participants?.length,
-        isAdmin: groupChat.participants?.some(
-          p => p.isAdmin && p.id._serialized === this.client?.info?.wid?._serialized,
-        ),
-      };
-    });
+    return Promise.all(
+      groups.map(async g => {
+        let groupChat = g as unknown as GroupChat;
+        // getChats() often returns groups without loaded metadata, leaving
+        // participants undefined. Fetch the full chat so the member count is
+        // accurate.
+        if (!groupChat.participants || groupChat.participants.length === 0) {
+          try {
+            groupChat = (await this.client!.getChatById(g.id._serialized)) as unknown as GroupChat;
+          } catch {
+            // keep the lightweight object if the fetch fails
+          }
+        }
+        return {
+          id: g.id._serialized,
+          name: g.name,
+          participantsCount: groupChat.participants?.length,
+          isAdmin: groupChat.participants?.some(p => p.isAdmin && p.id._serialized === myId),
+        };
+      }),
+    );
   }
 
   // ============= Phase 3: Extended Messaging =============
@@ -538,18 +549,33 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
         return null;
       }
       const groupChat = chat as unknown as GroupChat;
-      const participants: GroupParticipant[] = (groupChat.participants || []).map(p => ({
-        id: String(p.id._serialized),
-        number: String(p.id.user),
-        name: p.name ? String(p.name) : undefined,
-        isAdmin: Boolean(p.isAdmin),
-        isSuperAdmin: Boolean(p.isSuperAdmin),
-      }));
+      // Group participant objects only carry { id, isAdmin, isSuperAdmin } — no
+      // name. Resolve each participant's display name via their contact.
+      const participants: GroupParticipant[] = await Promise.all(
+        (groupChat.participants || []).map(async p => {
+          let name: string | undefined;
+          try {
+            const contact = await this.client!.getContactById(p.id._serialized);
+            name = contact?.pushname || contact?.name || undefined;
+          } catch {
+            // contact not resolvable — leave name undefined
+          }
+          return {
+            id: String(p.id._serialized),
+            number: String(p.id.user),
+            name,
+            isAdmin: Boolean(p.isAdmin),
+            isSuperAdmin: Boolean(p.isSuperAdmin),
+          };
+        }),
+      );
+
+      const meta = (groupChat as unknown as { groupMetadata?: { desc?: string } }).groupMetadata;
 
       return {
         id: chat.id._serialized,
         name: chat.name,
-        description: groupChat.description ? String(groupChat.description) : undefined,
+        description: groupChat.description || meta?.desc || undefined,
         owner: groupChat.owner?._serialized ? String(groupChat.owner._serialized) : undefined,
         createdAt: groupChat.createdAt,
         participants,

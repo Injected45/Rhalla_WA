@@ -17,6 +17,7 @@ const ApiKeys = lazy(() => import('./pages/ApiKeys').then(m => ({ default: m.Api
 const MessageTester = lazy(() => import('./pages/MessageTester').then(m => ({ default: m.MessageTester })));
 const Messages = lazy(() => import('./pages/Messages').then(m => ({ default: m.Messages })));
 const Groups = lazy(() => import('./pages/Groups').then(m => ({ default: m.Groups })));
+const Contacts = lazy(() => import('./pages/Contacts').then(m => ({ default: m.Contacts })));
 const Infrastructure = lazy(() => import('./pages/Infrastructure').then(m => ({ default: m.Infrastructure })));
 const Plugins = lazy(() => import('./pages/Plugins'));
 
@@ -109,6 +110,7 @@ function AppContent() {
             <Route path="message-tester" element={<MessageTester />} />
             <Route path="messages" element={<Messages />} />
             <Route path="groups" element={<Groups />} />
+            <Route path="contacts" element={<Contacts />} />
             <Route path="infrastructure" element={<Infrastructure />} />
             {role === 'admin' && <Route path="plugins" element={<Plugins />} />}
             <Route path="*" element={<Navigate to="/" replace />} />

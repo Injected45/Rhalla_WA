@@ -359,6 +359,27 @@ export const groupApi = {
 };
 
 // =============================================================================
+// Contact API
+// =============================================================================
+
+export interface Contact {
+  id: string;
+  name?: string;
+  pushName?: string;
+  number: string;
+  isMyContact: boolean;
+  isBlocked: boolean;
+}
+
+export const contactApi = {
+  list: (sessionId: string) => request<Contact[]>(`/sessions/${sessionId}/contacts`),
+  check: (sessionId: string, number: string) =>
+    request<{ number: string; exists: boolean; whatsappId: string | null }>(
+      `/sessions/${sessionId}/contacts/check/${encodeURIComponent(number)}`,
+    ),
+};
+
+// =============================================================================
 // Health & Infrastructure API
 // =============================================================================
 

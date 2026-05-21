@@ -61,6 +61,7 @@
     "messageTester": "Message Tester",
     "messages": "Messages",
     "groups": "Groups",
+    "contacts": "Contacts",
     "infrastructure": "Infrastructure",
     "plugins": "Plugins",
     "logs": "Logs"
@@ -126,6 +127,30 @@
       "owner": "Owner",
       "admin": "Admin",
       "member": "Member"
+    }
+  },
+  "contacts": {
+    "title": "Contacts",
+    "subtitle": "Browse contacts and check if a number is on WhatsApp",
+    "noSessions": "No connected sessions",
+    "check": {
+      "title": "Check a number",
+      "hint": "Enter a phone number (with country code, no +) to see if it has WhatsApp.",
+      "button": "Check",
+      "exists": "{{number}} is on WhatsApp ✓",
+      "notExists": "{{number}} is NOT on WhatsApp"
+    },
+    "all": {
+      "title": "All contacts",
+      "button": "Load contacts",
+      "search": "Search by number or name…",
+      "number": "Number",
+      "name": "Name",
+      "pushName": "WhatsApp name",
+      "saved": "Saved",
+      "yes": "Yes",
+      "empty": "No contacts loaded. Click \"Load contacts\".",
+      "truncated": "Showing first 500 of {{count}}. Use search to narrow down."
     }
   },
   "errorBoundary": {
