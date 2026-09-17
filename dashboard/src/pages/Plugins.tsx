@@ -16,6 +16,7 @@ import {
   Shield,
   Zap,
   X,
+  Info,
 } from 'lucide-react';
 import { pluginsApi } from '../services/api';
 import type { Plugin } from '../services/api';
@@ -70,7 +71,14 @@ export default function Plugins() {
     sessionDataPath: '/data/sessions',
     browserArgs: '--no-sandbox --disable-gpu',
   });
+  const [schemaConfig, setSchemaConfig] = useState<Record<string, unknown>>({});
   const [savingConfig, setSavingConfig] = useState(false);
+
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [detailsPlugin, setDetailsPlugin] = useState<Plugin | null>(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+
+  const [showAllFeatures, setShowAllFeatures] = useState(false);
 
   const refetchAll = () => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.plugins });
@@ -110,20 +118,66 @@ export default function Plugins() {
     }
   };
 
+  const hasConfigSchema = (plugin: Plugin | null): boolean =>
+    !!plugin?.configSchema && Object.keys(plugin.configSchema.properties).length > 0;
+
   const handleOpenConfig = (plugin: Plugin) => {
     setConfigPlugin(plugin);
+    if (plugin.type === 'engine') {
+      setEngineConfig({
+        type: plugin.id || 'whatsapp-web.js',
+        headless: (plugin.config?.headless as boolean) ?? infraStatus?.engine?.headless ?? true,
+        sessionDataPath: (plugin.config?.sessionDataPath as string) || '/data/sessions',
+        browserArgs: (plugin.config?.browserArgs as string) || '--no-sandbox --disable-gpu',
+      });
+    } else if (plugin.configSchema) {
+      const initial: Record<string, unknown> = {};
+      for (const [key, prop] of Object.entries(plugin.configSchema.properties)) {
+        initial[key] = plugin.config?.[key] ?? prop.default ?? (prop.type === 'boolean' ? false : '');
+      }
+      setSchemaConfig(initial);
+    }
     setShowConfigModal(true);
   };
 
   const handleSaveConfig = async () => {
+    if (!configPlugin) return;
     setSavingConfig(true);
     try {
-      toast.success(t('plugins.toasts.savedTitle'), t('plugins.toasts.savedDesc'));
-      setShowConfigModal(false);
+      const config: Record<string, unknown> =
+        configPlugin.type === 'engine'
+          ? {
+              headless: engineConfig.headless,
+              sessionDataPath: engineConfig.sessionDataPath,
+              browserArgs: engineConfig.browserArgs,
+            }
+          : schemaConfig;
+      const result = await pluginsApi.updateConfig(configPlugin.id, config);
+      if (result.success) {
+        toast.success(t('plugins.toasts.savedTitle'), result.message || t('plugins.toasts.savedDesc'));
+        setShowConfigModal(false);
+        refetchAll();
+      } else {
+        toast.error(t('plugins.toasts.saveFailed'), result.message);
+      }
     } catch (err) {
       toast.error(t('plugins.toasts.saveFailed'), err instanceof Error ? err.message : t('common.unknownError'));
     } finally {
       setSavingConfig(false);
+    }
+  };
+
+  const handleOpenDetails = async (plugin: Plugin) => {
+    setDetailsPlugin(plugin);
+    setShowDetailsModal(true);
+    setDetailsLoading(true);
+    try {
+      const full = await pluginsApi.get(plugin.id);
+      setDetailsPlugin(full);
+    } catch (err) {
+      toast.error(t('plugins.toasts.detailsError'), err instanceof Error ? err.message : t('common.unknownError'));
+    } finally {
+      setDetailsLoading(false);
     }
   };
 
@@ -178,13 +232,22 @@ export default function Plugins() {
           <div className="engine-features">
             <p className="features-label">{t('plugins.supportedFeatures')}</p>
             <div className="features-list">
-              {activeEngine.features.slice(0, 8).map(feature => (
+              {(showAllFeatures ? activeEngine.features : activeEngine.features.slice(0, 8)).map(feature => (
                 <span key={feature} className="feature-tag">
                   {feature}
                 </span>
               ))}
               {activeEngine.features.length > 8 && (
-                <span className="feature-more">{t('plugins.more', { count: activeEngine.features.length - 8 })}</span>
+                <button
+                  type="button"
+                  className="feature-more"
+                  onClick={() => setShowAllFeatures(v => !v)}
+                  aria-expanded={showAllFeatures}
+                >
+                  {showAllFeatures
+                    ? t('plugins.showLess')
+                    : t('plugins.more', { count: activeEngine.features.length - 8 })}
+                </button>
               )}
             </div>
           </div>
@@ -301,6 +364,14 @@ export default function Plugins() {
                   )}
 
                   <button
+                    onClick={() => handleOpenDetails(plugin)}
+                    className="btn-action"
+                    title={t('plugins.details')}
+                  >
+                    <Info size={16} />
+                  </button>
+
+                  <button
                     onClick={() => handleHealthCheck(plugin.id)}
                     disabled={isLoading}
                     className="btn-action"
@@ -391,6 +462,60 @@ export default function Plugins() {
                     </div>
                   </div>
                 </>
+              ) : hasConfigSchema(configPlugin) ? (
+                <div className="config-form">
+                  {Object.entries(configPlugin.configSchema!.properties).map(([key, prop]) => {
+                    const value = schemaConfig[key];
+                    const label = prop.title || key;
+                    if (prop.type === 'boolean') {
+                      return (
+                        <div className="form-group toggle-group" key={key}>
+                          <div className="toggle-info">
+                            <label>{label}</label>
+                            {prop.description && <small>{prop.description}</small>}
+                          </div>
+                          <label className="toggle-switch">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(value)}
+                              onChange={e => setSchemaConfig({ ...schemaConfig, [key]: e.target.checked })}
+                            />
+                            <span className="toggle-slider"></span>
+                          </label>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="form-group" key={key}>
+                        <label>{label}</label>
+                        {prop.enum && prop.enum.length > 0 ? (
+                          <select
+                            value={String(value ?? '')}
+                            onChange={e => setSchemaConfig({ ...schemaConfig, [key]: e.target.value })}
+                          >
+                            {prop.enum.map(opt => (
+                              <option key={String(opt)} value={String(opt)}>
+                                {String(opt)}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            type={prop.secret ? 'password' : prop.type === 'number' ? 'number' : 'text'}
+                            value={value === undefined || value === null ? '' : String(value)}
+                            onChange={e =>
+                              setSchemaConfig({
+                                ...schemaConfig,
+                                [key]: prop.type === 'number' ? Number(e.target.value) : e.target.value,
+                              })
+                            }
+                          />
+                        )}
+                        {prop.description && <small className="field-hint">{prop.description}</small>}
+                      </div>
+                    );
+                  })}
+                </div>
               ) : (
                 <div className="no-config">
                   <Settings size={48} style={{ opacity: 0.3 }} />
@@ -403,11 +528,105 @@ export default function Plugins() {
               <button className="btn-secondary" onClick={() => setShowConfigModal(false)}>
                 {t('common.cancel')}
               </button>
-              {configPlugin.type === 'engine' && (
+              {(configPlugin.type === 'engine' || hasConfigSchema(configPlugin)) && (
                 <button className="btn-primary" onClick={handleSaveConfig} disabled={savingConfig}>
                   {savingConfig ? <Loader2 size={16} className="animate-spin" /> : t('plugins.config.save')}
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDetailsModal && detailsPlugin && (
+        <div className="modal-overlay" onClick={() => setShowDetailsModal(false)}>
+          <div className="modal details-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>{t('plugins.detailsModal.title', { name: detailsPlugin.name })}</h2>
+              <button className="btn-icon" onClick={() => setShowDetailsModal(false)}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="modal-body">
+              {detailsLoading ? (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}>
+                  <Loader2 className="animate-spin" size={28} />
+                </div>
+              ) : (
+                <div className="details-list">
+                  <div className="detail-row">
+                    <span className="detail-label">{t('plugins.detailsModal.id')}</span>
+                    <span className="detail-value">{detailsPlugin.id}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-label">{t('plugins.detailsModal.version')}</span>
+                    <span className="detail-value">{detailsPlugin.version}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-label">{t('plugins.detailsModal.type')}</span>
+                    <span className="detail-value">{detailsPlugin.type}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-label">{t('plugins.detailsModal.status')}</span>
+                    <span className="detail-value">
+                      <span className={`status-dot ${detailsPlugin.status}`} /> {detailsPlugin.status}
+                    </span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-label">{t('plugins.detailsModal.author')}</span>
+                    <span className="detail-value">{detailsPlugin.author || t('plugins.detailsModal.notSet')}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-label">{t('plugins.detailsModal.loadedAt')}</span>
+                    <span className="detail-value">
+                      {detailsPlugin.loadedAt
+                        ? new Date(detailsPlugin.loadedAt).toLocaleString()
+                        : t('plugins.detailsModal.notSet')}
+                    </span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-label">{t('plugins.detailsModal.enabledAt')}</span>
+                    <span className="detail-value">
+                      {detailsPlugin.enabledAt
+                        ? new Date(detailsPlugin.enabledAt).toLocaleString()
+                        : t('plugins.detailsModal.notSet')}
+                    </span>
+                  </div>
+                  <div className="detail-row detail-row-block">
+                    <span className="detail-label">{t('plugins.detailsModal.provides')}</span>
+                    {detailsPlugin.provides && detailsPlugin.provides.length > 0 ? (
+                      <div className="plugin-provides">
+                        {detailsPlugin.provides.map(item => (
+                          <span key={item} className="provides-tag">
+                            {item}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="detail-value">{t('plugins.detailsModal.notSet')}</span>
+                    )}
+                  </div>
+                  {detailsPlugin.error && (
+                    <div className="detail-row detail-row-block">
+                      <span className="detail-label">{t('plugins.detailsModal.error')}</span>
+                      <div className="plugin-error">
+                        <p className="plugin-error-text">{detailsPlugin.error}</p>
+                      </div>
+                    </div>
+                  )}
+                  <div className="detail-row detail-row-block">
+                    <span className="detail-label">{t('plugins.detailsModal.config')}</span>
+                    <pre className="detail-config">{JSON.stringify(detailsPlugin.config ?? {}, null, 2)}</pre>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="modal-footer">
+              <button className="btn-secondary" onClick={() => setShowDetailsModal(false)}>
+                {t('common.close')}
+              </button>
             </div>
           </div>
         </div>

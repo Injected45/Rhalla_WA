@@ -36,8 +36,8 @@ export function useWebSocket(events: WebSocketEvents = {}) {
   const connect = useCallback(() => {
     if (socketRef.current?.connected) return;
 
-    // Get API key from sessionStorage (same as api.ts)
-    const apiKey = sessionStorage.getItem('openwa_api_key');
+    // Get API key from localStorage (same as api.ts)
+    const apiKey = localStorage.getItem('openwa_api_key');
 
     if (!apiKey) {
       console.warn('[WebSocket] No API key found, skipping connection');

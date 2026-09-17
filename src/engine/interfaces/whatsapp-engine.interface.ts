@@ -39,10 +39,13 @@ export interface IncomingMessage {
   senderName?: string;
   senderCountry?: string;
   media?: {
-    mimetype: string;
+    mimetype?: string;
     filename?: string;
     data?: string; // base64 (omitted when uploaded to storage)
     url?: string; // presigned storage URL when media is uploaded to S3
+    // Set when downloadMedia() failed after all retries — receivers (webhooks,
+    // n8n, etc.) can branch on this instead of getting a silent missing-media.
+    error?: string;
   };
   quotedMessage?: {
     id: string;

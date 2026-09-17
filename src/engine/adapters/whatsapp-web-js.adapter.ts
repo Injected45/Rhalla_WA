@@ -1,8 +1,11 @@
 import { EventEmitter } from 'events';
 import { Client, LocalAuth, MessageMedia, Message } from 'whatsapp-web.js';
+import { fetchAndDecryptWhatsAppMedia, RawMediaInfo } from './wa-media-decrypt';
+import { reflectChatsFromWAWeb, ReflectedChat } from './wa-chats-reflect';
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
 import * as qrcode from 'qrcode';
 import * as path from 'path';
+import * as fs from 'fs';
 import {
   IWhatsAppEngine,
   EngineStatus,
@@ -58,6 +61,13 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
   private phoneNumber: string | null = null;
   private pushName: string | null = null;
   private callbacks: EngineEventCallbacks = {};
+  private readyTimeoutHandle: NodeJS.Timeout | null = null;
+
+  // If wwjs fires `authenticated` (auth succeeded) but never fires `ready`
+  // (WhatsApp Web's chat loader is stuck) this many ms after auth, treat the
+  // session as wedged and mark it FAILED so ops sees it clearly and the
+  // controlling service can recover (retry, or trigger a QR rescan).
+  private static readonly READY_AFTER_AUTH_TIMEOUT_MS = 90_000;
 
   constructor(private readonly config: WhatsAppWebJsConfig) {
     super();
@@ -65,9 +75,38 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
 
   private readonly logger = createLogger('WhatsAppWebJsAdapter');
 
+  /**
+   * Remove Chromium single-instance lock/singleton files left behind after
+   * an unclean shutdown. Without this, the next browser launch either refuses
+   * to start or silently degrades.
+   */
+  private cleanupStaleChromiumLocks(): void {
+    const dir = path.resolve(this.config.sessionDataPath, `session-${this.config.sessionId}`);
+    if (!fs.existsSync(dir)) return;
+    const targets = ['SingletonLock', 'SingletonCookie', 'SingletonSocket', 'RunningChromeVersion', 'lockfile'];
+    const locations = [dir, path.join(dir, 'Default')];
+    for (const loc of locations) {
+      for (const name of targets) {
+        const p = path.join(loc, name);
+        try {
+          if (fs.existsSync(p)) {
+            fs.unlinkSync(p);
+            this.logger.log(`Removed stale Chromium file: ${path.relative(dir, p)}`);
+          }
+        } catch (err) {
+          // Non-fatal — Chromium may just recreate it and hopefully proceed.
+          this.logger.warn(`Could not remove ${p}: ${String(err)}`);
+        }
+      }
+    }
+  }
+
   async initialize(callbacks: EngineEventCallbacks): Promise<void> {
     this.callbacks = callbacks;
     this.setStatus(EngineStatus.INITIALIZING);
+
+    // Auto-heal after previous unclean shutdowns.
+    this.cleanupStaleChromiumLocks();
 
     try {
       // Build puppeteer args, including proxy if configured
@@ -97,6 +136,10 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
         puppeteer: {
           headless: this.config.puppeteer?.headless ?? true,
           args: puppeteerArgs,
+          // 10 min instead of puppeteer's 3 min default: WhatsApp Web can take longer to
+          // finish handshakes on slow links, and the default fires `Runtime.callFunctionOn
+          // timed out` before the client is really dead.
+          protocolTimeout: 600_000,
         },
       });
 
@@ -123,11 +166,37 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
     });
 
     this.client.on('authenticated', () => {
+      // wwjs's `authenticated` means auth SUCCEEDED (QR scanned or LocalAuth
+      // restored) — we're now waiting for `ready` while WhatsApp Web loads the
+      // chat UI. Keeping status as AUTHENTICATING is the closest label the DB
+      // enum supports; the real fix for "stuck in authenticating forever" is
+      // the ready-after-auth timeout armed here — if `ready` doesn't fire in
+      // 90s, we bail out FAILED so ops sees the stuck state and can recover
+      // instead of the session lying at "authenticating" indefinitely.
       this.setStatus(EngineStatus.AUTHENTICATING);
       this.qrCode = null;
+      this.armReadyTimeout();
     });
 
+    // Some builds of WhatsApp Web emit progress percentages during chat load —
+    // logging these gives visibility into where a wedged session is stuck.
+    (this.client as unknown as { on(event: string, listener: (...args: unknown[]) => void): void }).on(
+      'loading_screen',
+      (percent: unknown, message: unknown) => {
+        this.logger.log(`WhatsApp Web loading: ${String(percent)}% — ${String(message)}`);
+      },
+    );
+
+    // Internal wwjs state transitions (CONNECTED, CONFLICT, TIMEOUT, ...).
+    (this.client as unknown as { on(event: string, listener: (...args: unknown[]) => void): void }).on(
+      'change_state',
+      (state: unknown) => {
+        this.logger.log(`wwjs change_state: ${String(state)}`);
+      },
+    );
+
     this.client.on('ready', () => {
+      this.clearReadyTimeout();
       try {
         const info = this.client?.info;
         this.phoneNumber = info?.wid?.user || null;
@@ -169,14 +238,38 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
     });
 
     this.client.on('disconnected', reason => {
+      this.clearReadyTimeout();
       this.setStatus(EngineStatus.DISCONNECTED);
       this.callbacks.onDisconnected?.(reason);
     });
 
     this.client.on('auth_failure', () => {
+      this.clearReadyTimeout();
       this.setStatus(EngineStatus.FAILED);
       this.callbacks.onDisconnected?.('Authentication failed');
     });
+  }
+
+  private armReadyTimeout(): void {
+    this.clearReadyTimeout();
+    this.readyTimeoutHandle = setTimeout(() => {
+      this.logger.error(
+        `Engine wedged: authenticated fired but 'ready' did not arrive within ` +
+          `${WhatsAppWebJsAdapter.READY_AFTER_AUTH_TIMEOUT_MS}ms — WhatsApp Web is stuck loading chats. ` +
+          `Marking session FAILED so it stops silently sitting in 'authenticating'.`,
+      );
+      this.setStatus(EngineStatus.FAILED);
+      this.callbacks.onDisconnected?.('READY_TIMEOUT');
+      // Best-effort teardown so the next start() gets a clean browser.
+      void this.destroy().catch(err => this.logger.warn(`destroy after READY_TIMEOUT failed: ${String(err)}`));
+    }, WhatsAppWebJsAdapter.READY_AFTER_AUTH_TIMEOUT_MS);
+  }
+
+  private clearReadyTimeout(): void {
+    if (this.readyTimeoutHandle) {
+      clearTimeout(this.readyTimeoutHandle);
+      this.readyTimeoutHandle = null;
+    }
   }
 
   /**
@@ -202,17 +295,89 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
 
     // Handle media
     if (msg.hasMedia) {
-      try {
-        const media = await msg.downloadMedia();
-        if (media) {
-          incomingMessage.media = {
-            mimetype: media.mimetype,
-            filename: media.filename || undefined,
-            data: media.data,
-          };
+      // wwjs's downloadMedia() often fails on the first try when the media key
+      // hasn't been cached yet (common for group images from @lid senders and
+      // messages that arrive right as WA Web is still loading). A short retry
+      // recovers most of those; when it still fails we surface an error field
+      // instead of dropping the media silently, so webhook receivers can tell
+      // "download failed" apart from "no media".
+      const attempts = 3;
+      const backoffMs = [0, 500, 1500];
+      let lastError: unknown = null;
+      let downloaded = false;
+      for (let i = 0; i < attempts; i++) {
+        if (backoffMs[i] > 0) await new Promise(r => setTimeout(r, backoffMs[i]));
+        try {
+          const media = await msg.downloadMedia();
+          if (media) {
+            incomingMessage.media = {
+              mimetype: media.mimetype,
+              filename: media.filename || undefined,
+              data: media.data,
+            };
+            downloaded = true;
+            break;
+          }
+          // downloadMedia returned null/undefined without throwing — treat as
+          // a soft miss and retry.
+          lastError = new Error('downloadMedia returned no data');
+        } catch (error) {
+          lastError = error;
         }
-      } catch (error) {
-        this.logger.error('Error downloading media', String(error));
+      }
+      // Native fallback: when wwjs's downloadMedia() fails universally (as
+      // happens after WA Web renames the modules wwjs reflects into), decrypt
+      // the media ourselves from the raw crypto fields on msg._data. This
+      // bypasses puppeteer entirely and only depends on the WA CDN URL, the
+      // mediaKey, and Node's crypto — none of which drift with WA Web JS
+      // updates.
+      if (!downloaded) {
+        const raw = (msg as any)._data as
+          | {
+              directPath?: string;
+              deprecatedMms3Url?: string;
+              url?: string;
+              mediaKey?: unknown;
+              mimetype?: string;
+              filename?: string;
+              type?: string;
+            }
+          | undefined;
+        if (raw?.mediaKey && (raw.directPath || raw.url || raw.deprecatedMms3Url)) {
+          try {
+            const info: RawMediaInfo = {
+              directPath: raw.directPath || '',
+              mediaUrl: raw.url || raw.deprecatedMms3Url,
+              mediaKey: raw.mediaKey as RawMediaInfo['mediaKey'],
+              type: raw.type || msg.type,
+              mimetype: raw.mimetype,
+              filename: raw.filename,
+            };
+            const bytes = await fetchAndDecryptWhatsAppMedia(info);
+            incomingMessage.media = {
+              mimetype: raw.mimetype || 'application/octet-stream',
+              filename: raw.filename || undefined,
+              data: bytes.toString('base64'),
+            };
+            downloaded = true;
+            this.logger.log(`Native decrypt fallback succeeded (${bytes.length} bytes, type=${msg.type})`);
+          } catch (fbErr) {
+            lastError = fbErr;
+          }
+        }
+      }
+      if (!downloaded) {
+        // Log the real error (stack/message), not just its stringified form —
+        // wwjs's minified internal errors stringify to useless things like "r: r".
+        const err = lastError as { stack?: string; message?: string } | null;
+        const detail = err?.stack || err?.message || String(lastError);
+        this.logger.error(
+          `Failed to download media: wwjs + native fallback both failed (messageId=${msg.id?._serialized}, type=${msg.type})`,
+          detail,
+        );
+        incomingMessage.media = {
+          error: err?.message ? `download_failed: ${err.message}` : 'download_failed',
+        };
       }
     }
 
@@ -298,6 +463,7 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
   }
 
   async destroy(): Promise<void> {
+    this.clearReadyTimeout();
     if (this.client) {
       await this.client.destroy();
       this.client = null;
@@ -321,13 +487,62 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
     return this.pushName;
   }
 
+  // Whatsapp-web.js on current WhatsApp Web is flaky about the return of
+  // client.sendMessage — it sometimes resolves to `undefined` or throws a minified
+  // TypeError from inside the injected browser JS *after* the outbound send frame
+  // has already reached WhatsApp. Result: message delivers, but our old
+  // `msg.id._serialized` blew up with a 500 and MessageService marked the DB row
+  // as FAILED. These helpers extract safely and identify the known post-send
+  // failure signatures so we return a truthful "sent-but-unresolved" result
+  // instead of a 500 the caller can't distinguish from a real failure.
+
+  private resolveSendResult(msg: unknown, context: string): MessageResult {
+    const m = msg as { id?: { _serialized?: unknown }; timestamp?: unknown } | null | undefined;
+    const rawId = m?.id?._serialized;
+    const id = typeof rawId === 'string' && rawId.length > 0 ? rawId : '';
+    const rawTs = m?.timestamp;
+    const timestamp = typeof rawTs === 'number' && rawTs > 0 ? rawTs : Math.floor(Date.now() / 1000);
+    if (!id) {
+      this.logger.warn(
+        `${context}: whatsapp-web.js returned no message id — the message likely delivered but cannot be correlated. Returning empty id.`,
+      );
+    }
+    return { id, timestamp };
+  }
+
+  private isLikelyPostSendError(err: unknown): boolean {
+    const msg = (err instanceof Error ? err.message : String(err ?? '')).toLowerCase();
+    return (
+      msg.includes("reading 'id'") ||
+      msg.includes("reading '_serialized'") ||
+      msg.includes("reading 'timestamp'") ||
+      msg.includes('serialize') ||
+      msg.includes('evaluate at binding') ||
+      /^[a-z]:\s*[a-z]$/.test(msg.trim()) // minified obfuscation like "t: t"
+    );
+  }
+
+  private async runSend(context: string, sendFn: () => Promise<unknown>): Promise<MessageResult> {
+    try {
+      const msg = await sendFn();
+      return this.resolveSendResult(msg, context);
+    } catch (err) {
+      if (this.isLikelyPostSendError(err)) {
+        // ensureReady() would already have thrown for a session-dead state, and the
+        // outbound frame reaches WhatsApp before this class of error fires. Treat as
+        // delivered-without-id, log the underlying error for the operator.
+        this.logger.warn(
+          `${context}: sendMessage threw after ensureReady; treating as delivered without id. err=${String((err as Error)?.message ?? err).slice(0, 200)}`,
+        );
+        return { id: '', timestamp: Math.floor(Date.now() / 1000) };
+      }
+      throw err;
+    }
+  }
+
   async sendTextMessage(chatId: string, text: string): Promise<MessageResult> {
     this.ensureReady();
-    const msg = await this.client!.sendMessage(chatId, text);
-    return {
-      id: msg.id._serialized,
-      timestamp: msg.timestamp,
-    };
+    return this.runSend('sendTextMessage', () => this.client!.sendMessage(chatId, text));
   }
 
   async sendImageMessage(chatId: string, media: MediaInput): Promise<MessageResult> {
@@ -353,8 +568,29 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
 
     if (typeof media.data === 'string') {
       if (media.data.startsWith('http://') || media.data.startsWith('https://')) {
-        // URL
-        messageMedia = await MessageMedia.fromUrl(media.data);
+        // URL. MessageMedia.fromUrl derives filename from the URL path and mimetype
+        // from the response's Content-Type header — both of which are frequently wrong
+        // (temp-file hosts often serve application/octet-stream and random path names).
+        // Fetch as usual, then overwrite with the caller-provided values when present.
+        messageMedia = await MessageMedia.fromUrl(media.data, { unsafeMime: true });
+        // Guardrail: many file hosts return an HTML landing page (e.g. tmpfiles.org
+        // without /dl/) instead of the file bytes. If the caller asked for a non-HTML
+        // mimetype but we fetched HTML, refuse to send garbage.
+        const fetchedIsHtml = /^text\/html/i.test(messageMedia.mimetype || '');
+        const wantsNonHtml = media.mimetype && !/^text\/html/i.test(media.mimetype);
+        if (fetchedIsHtml && wantsNonHtml) {
+          throw new Error(
+            `URL returned HTML (text/html) instead of ${media.mimetype}. ` +
+              `The URL is likely a landing/preview page, not a direct download link. ` +
+              `Fix the URL to point to raw file bytes, or send as base64.`,
+          );
+        }
+        if (media.mimetype && media.mimetype !== 'application/octet-stream') {
+          messageMedia.mimetype = media.mimetype;
+        }
+        if (media.filename) {
+          messageMedia.filename = media.filename;
+        }
       } else {
         // Base64
         messageMedia = new MessageMedia(media.mimetype, media.data, media.filename);
@@ -364,28 +600,39 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
       messageMedia = new MessageMedia(media.mimetype, media.data.toString('base64'), media.filename);
     }
 
-    const msg = await this.client!.sendMessage(chatId, messageMedia, {
-      caption: media.caption,
-    });
-
-    return {
-      id: msg.id._serialized,
-      timestamp: msg.timestamp,
-    };
+    return this.runSend('sendMediaMessage', () =>
+      this.client!.sendMessage(chatId, messageMedia, { caption: media.caption }),
+    );
   }
 
   async getContacts(): Promise<Contact[]> {
     this.ensureReady();
-    const contacts = await this.client!.getContacts();
+    let contacts;
+    try {
+      contacts = await this.client!.getContacts();
+    } catch (err) {
+      // Known whatsapp-web.js failure mode on current WhatsApp Web: the injected
+      // contact resolver throws "getAlternateUserWid - Invalid get call using
+      // deviceWid" (or a minified variant) when any single contact record on the
+      // account has malformed state. It blows up the whole listing. Surface a
+      // truthful 503 with the underlying reason instead of a bare 500.
+      throw new Error(
+        `Contact listing failed inside whatsapp-web.js (upstream WhatsApp Web bug): ${
+          (err as Error)?.message ?? String(err)
+        }`,
+      );
+    }
 
-    return contacts.map(c => ({
-      id: c.id._serialized,
-      name: c.name || undefined,
-      pushName: c.pushname || undefined,
-      number: c.number,
-      isMyContact: c.isMyContact,
-      isBlocked: c.isBlocked,
-    }));
+    return contacts
+      .filter(c => c && c.id && c.id._serialized)
+      .map(c => ({
+        id: c.id._serialized,
+        name: c.name || undefined,
+        pushName: c.pushname || undefined,
+        number: c.number,
+        isMyContact: c.isMyContact,
+        isBlocked: c.isBlocked,
+      }));
   }
 
   async getContactById(contactId: string): Promise<Contact | null> {
@@ -414,33 +661,78 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
 
   async getGroups(): Promise<Group[]> {
     this.ensureReady();
-    const chats = await this.client!.getChats();
 
-    // Filter only group chats
-    const groups = chats.filter(chat => chat.isGroup);
-    const myId = this.client?.info?.wid?._serialized;
-
-    return Promise.all(
-      groups.map(async g => {
-        let groupChat = g as unknown as GroupChat;
-        // getChats() often returns groups without loaded metadata, leaving
-        // participants undefined. Fetch the full chat so the member count is
-        // accurate.
-        if (!groupChat.participants || groupChat.participants.length === 0) {
-          try {
-            groupChat = (await this.client!.getChatById(g.id._serialized)) as unknown as GroupChat;
-          } catch {
-            // keep the lightweight object if the fetch fails
+    // First try wwjs's built-in path. When it works, it returns the fully-
+    // hydrated Chat objects with methods we can call. When the WA-Web module
+    // rename bug is active, this throws with the minified "r: r" error — we
+    // then fall through to our reflection-based enumeration.
+    try {
+      const chats = await this.client!.getChats();
+      const groups = chats.filter(chat => chat.isGroup);
+      const myId = this.client?.info?.wid?._serialized;
+      return Promise.all(
+        groups.map(async g => {
+          let groupChat = g as unknown as GroupChat;
+          if (!groupChat.participants || groupChat.participants.length === 0) {
+            try {
+              groupChat = (await this.client!.getChatById(g.id._serialized)) as unknown as GroupChat;
+            } catch {
+              // keep the lightweight object if the fetch fails
+            }
           }
-        }
-        return {
-          id: g.id._serialized,
-          name: g.name,
-          participantsCount: groupChat.participants?.length,
-          isAdmin: groupChat.participants?.some(p => p.isAdmin && p.id._serialized === myId),
-        };
-      }),
+          return {
+            id: g.id._serialized,
+            name: g.name,
+            participantsCount: groupChat.participants?.length,
+            isAdmin: groupChat.participants?.some(p => p.isAdmin && p.id._serialized === myId),
+          };
+        }),
+      );
+    } catch (wwjsErr) {
+      const primary = (wwjsErr as Error)?.message ?? String(wwjsErr);
+      this.logger.warn(`wwjs getChats() failed, trying native WA-Web reflection fallback: ${primary}`);
+      const reflected = await this.reflectGroups();
+      if (reflected) return reflected;
+      throw new Error(`Group listing failed inside whatsapp-web.js (upstream WhatsApp Web bug): ${primary}`);
+    }
+  }
+
+  /**
+   * Reflect into WA Web ourselves to enumerate chats when wwjs's own path is
+   * broken. See src/engine/adapters/wa-chats-reflect.ts for the browser-side
+   * strategy (module-name candidates → webpack cache scan by shape).
+   */
+  private async reflectGroups(): Promise<Group[] | null> {
+    const pupPage = (this.client as unknown as { pupPage?: import('puppeteer').Page })?.pupPage;
+    if (!pupPage) return null;
+    let result;
+    try {
+      result = await reflectChatsFromWAWeb(pupPage);
+    } catch (err) {
+      this.logger.error('reflectChatsFromWAWeb crashed', (err as Error)?.stack || String(err));
+      return null;
+    }
+    if (!result.chats) {
+      this.logger.error(
+        'Native reflection could not find WA Web Chat collection',
+        JSON.stringify(result.diag).slice(0, 800),
+      );
+      return null;
+    }
+    this.logger.log(
+      `Native reflection found Chat collection via ${result.diag.source} (${result.chats.length} total chats)`,
     );
+    const myId = this.client?.info?.wid?._serialized;
+    return result.chats.filter(c => c.isGroup).map(c => this.reflectedToGroup(c, myId));
+  }
+
+  private reflectedToGroup(c: ReflectedChat, myId?: string): Group {
+    return {
+      id: c.id,
+      name: c.name || '',
+      participantsCount: c.participants?.length,
+      isAdmin: c.participants?.some(p => p.isAdmin && p.id === myId),
+    };
   }
 
   // ============= Phase 3: Extended Messaging =============
@@ -453,11 +745,7 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
       name: location.description || '',
       address: location.address || '',
     });
-    const msg = await this.client!.sendMessage(chatId, loc);
-    return {
-      id: msg.id._serialized,
-      timestamp: msg.timestamp,
-    };
+    return this.runSend('sendLocationMessage', () => this.client!.sendMessage(chatId, loc));
   }
 
   async sendContactMessage(chatId: string, contact: ContactCard): Promise<MessageResult> {
@@ -471,13 +759,7 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
       'END:VCARD',
     ].join('\n');
 
-    const msg = await this.client!.sendMessage(chatId, vcard, {
-      parseVCards: true,
-    });
-    return {
-      id: msg.id._serialized,
-      timestamp: msg.timestamp,
-    };
+    return this.runSend('sendContactMessage', () => this.client!.sendMessage(chatId, vcard, { parseVCards: true }));
   }
 
   async sendStickerMessage(chatId: string, media: MediaInput): Promise<MessageResult> {
@@ -494,13 +776,9 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
       messageMedia = new MessageMedia(media.mimetype, media.data.toString('base64'), media.filename);
     }
 
-    const msg = await this.client!.sendMessage(chatId, messageMedia, {
-      sendMediaAsSticker: true,
-    });
-    return {
-      id: msg.id._serialized,
-      timestamp: msg.timestamp,
-    };
+    return this.runSend('sendStickerMessage', () =>
+      this.client!.sendMessage(chatId, messageMedia, { sendMediaAsSticker: true }),
+    );
   }
 
   async replyToMessage(chatId: string, quotedMsgId: string, text: string): Promise<MessageResult> {
@@ -514,11 +792,7 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
       throw new Error(`Message ${quotedMsgId} not found`);
     }
 
-    const msg = await quotedMsg.reply(text);
-    return {
-      id: msg.id._serialized,
-      timestamp: msg.timestamp,
-    };
+    return this.runSend('replyToMessage', () => quotedMsg.reply(text));
   }
 
   async forwardMessage(fromChatId: string, toChatId: string, messageId: string): Promise<MessageResult> {
@@ -583,9 +857,67 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
         isAnnounce: Boolean(groupChat.isAnnounce),
       };
     } catch (error) {
-      this.logger.warn(`Failed to get group: ${groupId}`, String(error));
+      this.logger.warn(`wwjs getChatById failed for ${groupId}, trying native reflection fallback: ${String(error)}`);
+      const fb = await this.reflectGroupInfo(groupId);
+      if (fb) return fb;
       return null;
     }
+  }
+
+  /**
+   * Fallback for getGroupInfo when wwjs's getChatById is broken by the same
+   * WA-Web module rename. Reflection returns ALL chats — we pick the one we
+   * want. Extra cost is acceptable because this is the recovery path.
+   */
+  private async reflectGroupInfo(groupId: string): Promise<GroupInfo | null> {
+    const pupPage = (this.client as unknown as { pupPage?: import('puppeteer').Page })?.pupPage;
+    if (!pupPage) return null;
+    let result;
+    try {
+      result = await reflectChatsFromWAWeb(pupPage);
+    } catch (err) {
+      this.logger.error('reflectChatsFromWAWeb crashed in getGroupInfo', (err as Error)?.stack || String(err));
+      return null;
+    }
+    if (!result.chats) {
+      this.logger.error(
+        'Native reflection could not find WA Web Chat collection in getGroupInfo',
+        JSON.stringify(result.diag).slice(0, 800),
+      );
+      return null;
+    }
+    const c = result.chats.find(x => x.id === groupId && x.isGroup);
+    if (!c) return null;
+    // Resolve participant display names — this MAY also fail if getContactById
+    // reflection is broken; on failure we return the raw ids without names.
+    const participants: GroupParticipant[] = await Promise.all(
+      c.participants.map(async p => {
+        let name: string | undefined;
+        try {
+          const contact = await this.client!.getContactById(p.id);
+          name = contact?.pushname || contact?.name || undefined;
+        } catch {
+          // ignore
+        }
+        return {
+          id: p.id,
+          number: p.id.split('@')[0],
+          name,
+          isAdmin: p.isAdmin,
+          isSuperAdmin: p.isSuperAdmin,
+        };
+      }),
+    );
+    return {
+      id: c.id,
+      name: c.name || '',
+      description: c.description,
+      owner: c.ownerId,
+      createdAt: c.createdAt,
+      participants,
+      isReadOnly: false,
+      isAnnounce: false,
+    };
   }
 
   async createGroup(name: string, participants: string[]): Promise<Group> {

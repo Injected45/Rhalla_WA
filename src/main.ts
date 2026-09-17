@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
+import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
 import { ShutdownService } from './common/services/shutdown.service';
 import * as dotenv from 'dotenv';
@@ -66,6 +67,11 @@ STORAGE_PATH=./data/media
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Raise body-parser limits so base64-encoded media uploads (send-image/video/audio/document)
+  // can carry realistic file sizes. Express default is 100 KB, which 413s on anything real.
+  app.use(json({ limit: '50mb' }));
+  app.use(urlencoded({ extended: true, limit: '50mb' }));
 
   // Enable shutdown hooks for graceful shutdown
   app.enableShutdownHooks();

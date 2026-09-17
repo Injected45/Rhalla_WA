@@ -1,23 +1,53 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, HttpCode, HttpStatus } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBody } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Param,
+  Body,
+  HttpCode,
+  HttpStatus,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBody, ApiProperty } from '@nestjs/swagger';
+import { IsString, IsNotEmpty, IsArray, ArrayNotEmpty } from 'class-validator';
 import { SessionService } from '../session/session.service';
 
 // DTOs
 class CreateGroupDto {
-  name: string;
-  participants: string[];
+  @ApiProperty({ description: 'Group name' })
+  @IsString()
+  @IsNotEmpty()
+  name!: string;
+
+  @ApiProperty({ description: 'Participant IDs or phone numbers', type: [String] })
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsString({ each: true })
+  participants!: string[];
 }
 
 class ParticipantsDto {
-  participants: string[];
+  @ApiProperty({ description: 'Participant IDs or phone numbers', type: [String] })
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsString({ each: true })
+  participants!: string[];
 }
 
 class GroupSubjectDto {
-  subject: string;
+  @ApiProperty({ description: 'New group subject/name' })
+  @IsString()
+  @IsNotEmpty()
+  subject!: string;
 }
 
 class GroupDescriptionDto {
-  description: string;
+  @ApiProperty({ description: 'New group description' })
+  @IsString()
+  description!: string;
 }
 
 @ApiTags('groups')
@@ -44,7 +74,7 @@ export class GroupController {
     const engine = this.getEngine(sessionId);
     const group = await engine.getGroupInfo(groupId);
     if (!group) {
-      throw new Error(`Group ${groupId} not found`);
+      throw new NotFoundException(`Group ${groupId} not found`);
     }
     return group;
   }
@@ -205,7 +235,7 @@ export class GroupController {
   private getEngine(sessionId: string) {
     const engine = this.sessionService.getEngine(sessionId);
     if (!engine) {
-      throw new Error('Session is not started');
+      throw new BadRequestException('Session is not started');
     }
     return engine;
   }
