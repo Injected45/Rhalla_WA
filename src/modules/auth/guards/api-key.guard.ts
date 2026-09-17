@@ -2,6 +2,7 @@ import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
 import { AuthService } from '../auth.service';
+import { SessionAccessService } from '../session-access.service';
 import { ApiKeyRole } from '../entities/api-key.entity';
 import { REQUIRED_ROLE_KEY, PUBLIC_KEY } from '../decorators/auth.decorators';
 
@@ -9,6 +10,7 @@ import { REQUIRED_ROLE_KEY, PUBLIC_KEY } from '../decorators/auth.decorators';
 export class ApiKeyGuard implements CanActivate {
   constructor(
     private readonly authService: AuthService,
+    private readonly sessionAccess: SessionAccessService,
     private readonly reflector: Reflector,
   ) {}
 
@@ -44,10 +46,29 @@ export class ApiKeyGuard implements CanActivate {
       throw new UnauthorizedException(`Insufficient permissions. Required: ${requiredRole}`);
     }
 
+    // Tenant isolation: a key bound to an account may only touch that account's
+    // sessions. Enforced here rather than per-controller so it covers every
+    // session-scoped route at once — messages, contacts, groups, labels,
+    // channels, status, catalog and webhooks are all nested under a session.
+    if (sessionId && this.isSessionScopedRoute(request)) {
+      await this.sessionAccess.assertCanAccessSession(this.sessionAccess.scopeFor(apiKey), sessionId);
+    }
+
     // Attach API key to request for use in controllers
     (request as Request & { apiKey: typeof apiKey }).apiKey = apiKey;
 
     return true;
+  }
+
+  /**
+   * True for routes under /api/sessions/... — the only place where a
+   * `sessionId`/`id` param actually names a session. Other resources
+   * (api-keys, users) use `id` for their own rows and must not be checked
+   * against the sessions table.
+   */
+  private isSessionScopedRoute(request: Request): boolean {
+    const path = (request.path || request.url || '').split('?')[0];
+    return /^\/api\/sessions\/[^/]+/.test(path);
   }
 
   private extractApiKey(request: Request): string | undefined {

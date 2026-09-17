@@ -5,8 +5,9 @@ import { CreateSessionDto, SessionResponseDto, QRCodeResponseDto } from './dto';
 import { Session } from './entities/session.entity';
 import { AuditService } from '../audit/audit.service';
 import { AuditAction } from '../audit/entities/audit-log.entity';
-import { RequireRole } from '../auth/decorators/auth.decorators';
-import { ApiKeyRole } from '../auth/entities/api-key.entity';
+import { RequireRole, CurrentApiKey } from '../auth/decorators/auth.decorators';
+import { ApiKey, ApiKeyRole } from '../auth/entities/api-key.entity';
+import { SessionAccessService } from '../auth/session-access.service';
 
 @ApiTags('sessions')
 @Controller('sessions')
@@ -14,6 +15,7 @@ export class SessionController {
   constructor(
     private readonly sessionService: SessionService,
     private readonly auditService: AuditService,
+    private readonly sessionAccess: SessionAccessService,
   ) {}
 
   // Transform entity to DTO with lastActive field name
@@ -39,9 +41,12 @@ export class SessionController {
     description: 'Session created',
     type: SessionResponseDto,
   })
+  @ApiResponse({ status: 403, description: 'Subscription expired or session limit reached' })
   @ApiResponse({ status: 409, description: 'Session name already exists' })
-  async create(@Body() dto: CreateSessionDto): Promise<Session> {
-    const session = await this.sessionService.create(dto);
+  async create(@Body() dto: CreateSessionDto, @CurrentApiKey() apiKey?: ApiKey): Promise<Session> {
+    // The session belongs to the account behind the calling key. A key with no
+    // owner (the bootstrap/system key) creates unowned, unmetered sessions.
+    const session = await this.sessionService.create(dto, this.sessionAccess.scopeFor(apiKey));
     await this.auditService.logInfo(AuditAction.SESSION_CREATED, {
       sessionId: session.id,
       sessionName: session.name,
@@ -56,8 +61,9 @@ export class SessionController {
     description: 'List of sessions',
     type: [SessionResponseDto],
   })
-  async findAll(): Promise<SessionResponseDto[]> {
-    const sessions = await this.sessionService.findAll();
+  async findAll(@CurrentApiKey() apiKey?: ApiKey): Promise<SessionResponseDto[]> {
+    // Scoped to the calling account; a system/admin key (no owner) sees all.
+    const sessions = await this.sessionService.findAll(this.sessionAccess.scopeFor(apiKey));
     return sessions.map(s => this.transformSession(s));
   }
 
@@ -103,6 +109,7 @@ export class SessionController {
     type: SessionResponseDto,
   })
   @ApiResponse({ status: 400, description: 'Session already started' })
+  @ApiResponse({ status: 403, description: 'Subscription expired or session limit reached' })
   @ApiResponse({ status: 404, description: 'Session not found' })
   async start(@Param('id') id: string): Promise<SessionResponseDto> {
     const session = await this.sessionService.start(id);
@@ -174,7 +181,7 @@ export class SessionController {
     status: 200,
     description: 'Session statistics including counts and memory usage',
   })
-  async getStats(): Promise<{
+  async getStats(@CurrentApiKey() apiKey?: ApiKey): Promise<{
     total: number;
     active: number;
     ready: number;
@@ -182,6 +189,6 @@ export class SessionController {
     byStatus: Record<string, number>;
     memoryUsage: { heapUsed: number; heapTotal: number; rss: number };
   }> {
-    return this.sessionService.getStats();
+    return this.sessionService.getStats(this.sessionAccess.scopeFor(apiKey));
   }
 }

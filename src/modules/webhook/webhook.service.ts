@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
@@ -69,7 +69,20 @@ export class WebhookService {
     });
   }
 
-  async findAll(): Promise<Webhook[]> {
+  /**
+   * @param sessionIds restrict to these sessions (one tenant's). null means an
+   *   unrestricted system/admin key and returns every webhook.
+   */
+  async findAll(sessionIds?: string[] | null): Promise<Webhook[]> {
+    if (sessionIds !== null && sessionIds !== undefined) {
+      // No accessible sessions means no webhooks — never fall through to all.
+      if (sessionIds.length === 0) return [];
+      return this.webhookRepository.find({
+        where: { sessionId: In(sessionIds) },
+        order: { createdAt: 'DESC' },
+      });
+    }
+
     return this.webhookRepository.find({
       order: { createdAt: 'DESC' },
     });

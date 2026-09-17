@@ -11,6 +11,8 @@ import {
 import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
 import { AuthService } from '../auth/auth.service';
+import { SessionAccessService } from '../auth/session-access.service';
+import type { ApiKey } from '../auth/entities/api-key.entity';
 import type {
   WSClientMessage,
   WSSubscribeRequest,
@@ -35,7 +37,10 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
 
   private logger = new Logger('EventsGateway');
 
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly sessionAccess: SessionAccessService,
+  ) {}
 
   afterInit() {
     this.logger.log('WebSocket Gateway initialized');
@@ -78,10 +83,10 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
   }
 
   @SubscribeMessage('message')
-  handleMessage(@ConnectedSocket() client: Socket, @MessageBody() message: WSClientMessage) {
+  async handleMessage(@ConnectedSocket() client: Socket, @MessageBody() message: WSClientMessage) {
     switch (message.type) {
       case 'subscribe':
-        return this.handleSubscribe(client, message);
+        return await this.handleSubscribe(client, message);
       case 'unsubscribe':
         return this.handleUnsubscribe(client, message);
       case 'ping':
@@ -95,7 +100,10 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     }
   }
 
-  private handleSubscribe(client: Socket, message: WSSubscribeRequest): WSSubscribedResponse | WSErrorResponse {
+  private async handleSubscribe(
+    client: Socket,
+    message: WSSubscribeRequest,
+  ): Promise<WSSubscribedResponse | WSErrorResponse> {
     const { sessionId, events, requestId } = message;
 
     // Validate sessionId
@@ -120,12 +128,38 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       );
     }
 
+    // Tenant isolation. A key bound to an account may only subscribe to its own
+    // sessions — without this check any authenticated client could join another
+    // tenant's room (or the '*' wildcard room, which receives every session's
+    // events) and stream their messages live.
+    const ownerUserId = this.sessionAccess.scopeFor((client.data as { apiKey?: ApiKey }).apiKey);
+
+    // Sessions this subscription actually covers. '*' means "everything I may
+    // see": for a tenant that is their own sessions, for a system/admin key it
+    // stays the global wildcard.
+    let sessionRefs: string[];
+    if (sessionId === '*') {
+      const owned = await this.sessionAccess.accessibleSessionIds(ownerUserId);
+      sessionRefs = owned ?? ['*'];
+      if (sessionRefs.length === 0) {
+        return this.createError('NO_SESSIONS', 'This account has no sessions to subscribe to', requestId);
+      }
+    } else {
+      if (!(await this.sessionAccess.canAccessSession(ownerUserId, sessionId))) {
+        this.logger.warn(`Client ${client.id} denied subscription to session ${sessionId}`);
+        return this.createError('FORBIDDEN_SESSION', 'This session belongs to another account', requestId);
+      }
+      sessionRefs = [sessionId];
+    }
+
     // Join rooms for each session/event combination
     const rooms: string[] = [];
-    for (const event of validEvents) {
-      const room = buildRoomName(sessionId, event);
-      void client.join(room);
-      rooms.push(room);
+    for (const ref of sessionRefs) {
+      for (const event of validEvents) {
+        const room = buildRoomName(ref, event);
+        void client.join(room);
+        rooms.push(room);
+      }
     }
 
     this.logger.debug(`Client ${client.id} subscribed to: ${rooms.join(', ')}`);

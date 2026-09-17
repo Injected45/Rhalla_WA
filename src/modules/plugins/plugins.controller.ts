@@ -2,9 +2,13 @@ import { Controller, Get, Post, Put, Param, Body, HttpCode, HttpStatus } from '@
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { PluginsService } from './plugins.service';
 import { PluginDto, PluginConfigDto } from './dto/plugin.dto';
+import { RequireRole } from '../auth/decorators/auth.decorators';
+import { ApiKeyRole } from '../auth/entities/api-key.entity';
 
 @ApiTags('plugins')
 @ApiBearerAuth()
+// plugin management is administrator-only.
+@RequireRole(ApiKeyRole.ADMIN)
 @Controller('plugins')
 export class PluginsController {
   constructor(private readonly pluginsService: PluginsService) {}

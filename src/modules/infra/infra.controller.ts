@@ -12,6 +12,8 @@ import { ShutdownService } from '../../common/services/shutdown.service';
 import { createLogger } from '../../common/services/logger.service';
 import * as fs from 'fs';
 import * as path from 'path';
+import { RequireRole } from '../auth/decorators/auth.decorators';
+import { ApiKeyRole } from '../auth/entities/api-key.entity';
 
 interface InfraStatus {
   database: { connected: boolean; type: string; host: string };
@@ -132,6 +134,8 @@ interface MigrationTables {
 }
 
 @ApiTags('infrastructure')
+// infrastructure config, data export/import and restart is administrator-only.
+@RequireRole(ApiKeyRole.ADMIN)
 @Controller('infra')
 export class InfraController {
   private readonly logger = createLogger('InfraController');
