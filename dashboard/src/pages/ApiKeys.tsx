@@ -10,11 +10,27 @@ import {
 import { Plus, Copy, RefreshCw, Trash2, Eye, EyeOff, Loader2, X, Check, KeyRound, AlertTriangle } from 'lucide-react';
 import type { ApiKey } from '../services/api';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
-import { useApiKeysQuery, useCreateApiKeyMutation, useDeleteApiKeyMutation, useRevokeApiKeyMutation } from '../hooks/queries';
+import { useRole, type UserRole } from '../hooks/useRole';
+import {
+  useApiKeysQuery,
+  useCreateApiKeyMutation,
+  useDeleteApiKeyMutation,
+  useRevokeApiKeyMutation,
+} from '../hooks/queries';
 import { PageHeader } from '../components/PageHeader';
 import './ApiKeys.css';
 
-const roleNames = ['admin', 'operator', 'viewer'] as const;
+const allRoleNames = ['admin', 'operator', 'viewer'] as const;
+
+/**
+ * A key can never grant more than its issuer holds — the server enforces the
+ * same cap — so the picker only offers roles at or below the caller's own.
+ */
+function grantableRoles(role: UserRole | null): readonly string[] {
+  if (role === 'admin') return allRoleNames;
+  if (role === 'operator') return ['operator', 'viewer'];
+  return ['viewer'];
+}
 
 function useWindowSize() {
   const [width, setWidth] = useState(window.innerWidth);
@@ -31,6 +47,7 @@ const columnHelper = createColumnHelper<ApiKey>();
 export function ApiKeys() {
   const { t } = useTranslation();
   useDocumentTitle(t('apiKeys.title'));
+  const { role } = useRole();
   const { data: apiKeys = [], isLoading: loading } = useApiKeysQuery();
   const createMutation = useCreateApiKeyMutation();
   const deleteMutation = useDeleteApiKeyMutation();
@@ -207,10 +224,13 @@ export function ApiKeys() {
         title={t('apiKeys.title')}
         subtitle={t('apiKeys.subtitle')}
         actions={
-          <button className="btn-primary" onClick={() => setShowModal(true)}>
-            <Plus size={18} />
-            {t('apiKeys.createBtn')}
-          </button>
+          // Issuing a key needs operator rights; a viewer can only look.
+          role === 'viewer' ? undefined : (
+            <button className="btn-primary" onClick={() => setShowModal(true)}>
+              <Plus size={18} />
+              {t('apiKeys.createBtn')}
+            </button>
+          )
         }
       />
 
@@ -267,7 +287,7 @@ export function ApiKeys() {
                   />
                   <label>{t('common.role')}</label>
                   <select value={newKey.role} onChange={e => setNewKey({ ...newKey, role: e.target.value })}>
-                    {roleNames.map(r => (
+                    {grantableRoles(role).map(r => (
                       <option key={r} value={r}>
                         {t(`apiKeys.roles.${r}`)}
                       </option>
@@ -327,7 +347,7 @@ export function ApiKeys() {
         <div className="permissions-reference">
           <h3>{t('apiKeys.rolesTitle')}</h3>
           <div className="permissions-list">
-            {roleNames.map(r => (
+            {allRoleNames.map(r => (
               <div key={r} className="perm-item">
                 <code>{r}</code>
                 <span>{t(`apiKeys.roleDescriptions.${r}`)}</span>
@@ -342,9 +362,7 @@ export function ApiKeys() {
           <div className="modal confirm-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h2>
-                {confirmAction.type === 'delete'
-                  ? t('apiKeys.confirm.deleteTitle')
-                  : t('apiKeys.confirm.revokeTitle')}
+                {confirmAction.type === 'delete' ? t('apiKeys.confirm.deleteTitle') : t('apiKeys.confirm.revokeTitle')}
               </h2>
               <button className="btn-icon" onClick={() => setConfirmAction(null)}>
                 <X size={20} />
@@ -357,9 +375,7 @@ export function ApiKeys() {
               <p className="confirm-message">
                 <Trans
                   i18nKey={
-                    confirmAction.type === 'delete'
-                      ? 'apiKeys.confirm.deleteMessage'
-                      : 'apiKeys.confirm.revokeMessage'
+                    confirmAction.type === 'delete' ? 'apiKeys.confirm.deleteMessage' : 'apiKeys.confirm.revokeMessage'
                   }
                   values={{ name: confirmAction.name }}
                   components={{ strong: <strong /> }}
@@ -371,9 +387,7 @@ export function ApiKeys() {
                 {t('common.cancel')}
               </button>
               <button className="btn-danger" onClick={confirmAndExecute}>
-                {confirmAction.type === 'delete'
-                  ? t('apiKeys.confirm.delete')
-                  : t('apiKeys.confirm.revoke')}
+                {confirmAction.type === 'delete' ? t('apiKeys.confirm.delete') : t('apiKeys.confirm.revoke')}
               </button>
             </div>
           </div>

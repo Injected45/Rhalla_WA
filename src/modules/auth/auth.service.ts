@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, UnauthorizedException, OnModuleInit } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException, UnauthorizedException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { createHash, randomBytes } from 'crypto';
@@ -105,7 +105,22 @@ export class AuthService implements OnModuleInit {
     return this.apiKeyRepository.save(apiKey);
   }
 
-  async createApiKey(dto: CreateApiKeyDto): Promise<{ apiKey: ApiKey; rawKey: string }> {
+  /**
+   * @param caller the key the request authenticated with. The new key is bound
+   *   to that caller's account, so a normal account can issue keys for its own
+   *   API integrations without ever getting one that reaches other accounts.
+   *   A caller with no owner (the bootstrap key) still mints unowned,
+   *   unrestricted keys, which is what existing scripts rely on.
+   */
+  async createApiKey(dto: CreateApiKeyDto, caller?: ApiKey): Promise<{ apiKey: ApiKey; rawKey: string }> {
+    const requestedRole = dto.role || ApiKeyRole.OPERATOR;
+
+    // A key may never grant more than its issuer holds, otherwise an operator
+    // could mint an admin key and escalate.
+    if (caller && !this.hasPermission(caller, requestedRole)) {
+      throw new ForbiddenException(`Cannot issue a key with more permissions than your own (${caller.role})`);
+    }
+
     // Generate secure random key: owa_k1_<32 bytes hex>
     const rawKey = `owa_k1_${randomBytes(32).toString('hex')}`;
     const keyHash = this.hashKey(rawKey);
@@ -115,7 +130,8 @@ export class AuthService implements OnModuleInit {
       name: dto.name,
       keyHash,
       keyPrefix,
-      role: dto.role || ApiKeyRole.OPERATOR,
+      role: requestedRole,
+      ownerUserId: caller?.ownerUserId ?? null,
       allowedIps: dto.allowedIps || null,
       allowedSessions: dto.allowedSessions || null,
       expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
@@ -131,22 +147,32 @@ export class AuthService implements OnModuleInit {
     return { apiKey: saved, rawKey };
   }
 
-  async findAll(): Promise<ApiKey[]> {
+  /**
+   * @param ownerUserId restrict to one account's keys. null/undefined is an
+   *   unrestricted caller (bootstrap key or the owner) and returns all.
+   */
+  async findAll(ownerUserId?: string | null): Promise<ApiKey[]> {
     return this.apiKeyRepository.find({
+      where: ownerUserId ? { ownerUserId } : {},
       order: { createdAt: 'DESC' },
     });
   }
 
-  async findOne(id: string): Promise<ApiKey> {
+  /**
+   * @param ownerUserId when set, a key belonging to another account is
+   *   reported as missing rather than forbidden, so the scoping does not
+   *   confirm that someone else's key id exists.
+   */
+  async findOne(id: string, ownerUserId?: string | null): Promise<ApiKey> {
     const apiKey = await this.apiKeyRepository.findOne({ where: { id } });
-    if (!apiKey) {
+    if (!apiKey || (ownerUserId && apiKey.ownerUserId !== ownerUserId)) {
       throw new NotFoundException(`API key with id '${id}' not found`);
     }
     return apiKey;
   }
 
-  async update(id: string, dto: UpdateApiKeyDto): Promise<ApiKey> {
-    const apiKey = await this.findOne(id);
+  async update(id: string, dto: UpdateApiKeyDto, ownerUserId?: string | null): Promise<ApiKey> {
+    const apiKey = await this.findOne(id, ownerUserId);
 
     if (dto.name) apiKey.name = dto.name;
     if (dto.role) apiKey.role = dto.role;
@@ -157,8 +183,8 @@ export class AuthService implements OnModuleInit {
     return this.apiKeyRepository.save(apiKey);
   }
 
-  async delete(id: string): Promise<void> {
-    const apiKey = await this.findOne(id);
+  async delete(id: string, ownerUserId?: string | null): Promise<void> {
+    const apiKey = await this.findOne(id, ownerUserId);
     await this.apiKeyRepository.remove(apiKey);
     this.logger.log(`API key deleted: ${apiKey.name}`, {
       keyId: id,
@@ -166,8 +192,8 @@ export class AuthService implements OnModuleInit {
     });
   }
 
-  async revoke(id: string): Promise<ApiKey> {
-    const apiKey = await this.findOne(id);
+  async revoke(id: string, ownerUserId?: string | null): Promise<ApiKey> {
+    const apiKey = await this.findOne(id, ownerUserId);
     apiKey.isActive = false;
     return this.apiKeyRepository.save(apiKey);
   }

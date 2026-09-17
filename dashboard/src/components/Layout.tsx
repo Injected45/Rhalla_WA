@@ -41,7 +41,7 @@ const allNavItems = [
   { to: '/', icon: LayoutDashboard, key: 'dashboard' as const, adminOnly: false },
   { to: '/sessions', icon: Smartphone, key: 'sessions' as const, adminOnly: false },
   { to: '/webhooks', icon: Webhook, key: 'webhooks' as const, adminOnly: false },
-  { to: '/api-keys', icon: Key, key: 'apiKeys' as const, adminOnly: true },
+  { to: '/api-keys', icon: Key, key: 'apiKeys' as const, adminOnly: false },
   { to: '/users', icon: UserCog, key: 'users' as const, adminOnly: true },
   { to: '/message-tester', icon: Send, key: 'messageTester' as const, adminOnly: false },
   { to: '/messages', icon: MessageSquare, key: 'messages' as const, adminOnly: false },
@@ -139,9 +139,17 @@ export function Layout({ onLogout, userRole }: LayoutProps) {
             title={isCollapsed ? t('common.expand') : t('common.collapse')}
             aria-label={isCollapsed ? t('common.expand') : t('common.collapse')}
           >
-            {isCollapsed
-              ? (isRtl ? <ChevronLeft size={16} /> : <ChevronRight size={16} />)
-              : (isRtl ? <ChevronRight size={16} /> : <ChevronLeft size={16} />)}
+            {isCollapsed ? (
+              isRtl ? (
+                <ChevronLeft size={16} />
+              ) : (
+                <ChevronRight size={16} />
+              )
+            ) : isRtl ? (
+              <ChevronRight size={16} />
+            ) : (
+              <ChevronLeft size={16} />
+            )}
           </button>
         )}
 
@@ -174,11 +182,7 @@ export function Layout({ onLogout, userRole }: LayoutProps) {
             <Languages size={18} />
             {!isCollapsed && <span>{languageLabel}</span>}
           </button>
-          <button
-            className="theme-toggle-btn"
-            onClick={toggleTheme}
-            title={t('theme.label', { value: themeLabel })}
-          >
+          <button className="theme-toggle-btn" onClick={toggleTheme} title={t('theme.label', { value: themeLabel })}>
             <ThemeIcon size={18} />
             {!isCollapsed && <span>{themeLabel}</span>}
           </button>

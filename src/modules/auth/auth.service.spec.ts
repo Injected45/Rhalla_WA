@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { UnauthorizedException, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, UnauthorizedException, NotFoundException } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { AuthService } from './auth.service';
 import { UserService } from './user.service';
@@ -114,7 +114,7 @@ describe('AuthService', () => {
       const result = await service.findAll();
 
       expect(result).toHaveLength(2);
-      expect(repository.find).toHaveBeenCalledWith({ order: { createdAt: 'DESC' } });
+      expect(repository.find).toHaveBeenCalledWith({ where: {}, order: { createdAt: 'DESC' } });
     });
   });
 
@@ -341,6 +341,60 @@ describe('AuthService', () => {
       // CIDR match
       const r2 = await service.validateApiKey('mixed', '192.168.50.1');
       expect(r2.id).toBe(key.id);
+    });
+  });
+
+  // ── per-account keys ──────────────────────────────────────────────
+
+  describe('account-scoped API keys', () => {
+    it('should bind a new key to the calling account', async () => {
+      const caller = createMockApiKey({ ownerUserId: 'user-a', role: ApiKeyRole.OPERATOR });
+      (repository.create as jest.Mock).mockImplementation((e: unknown) => e);
+      (repository.save as jest.Mock).mockImplementation((e: unknown) => Promise.resolve(e));
+
+      await service.createApiKey({ name: 'My integration', role: ApiKeyRole.OPERATOR }, caller);
+
+      expect(repository.create).toHaveBeenCalledWith(expect.objectContaining({ ownerUserId: 'user-a' }));
+    });
+
+    it('should leave a bootstrap-issued key unowned, as scripts rely on', async () => {
+      const caller = createMockApiKey({ ownerUserId: null, role: ApiKeyRole.ADMIN });
+      (repository.create as jest.Mock).mockImplementation((e: unknown) => e);
+      (repository.save as jest.Mock).mockImplementation((e: unknown) => Promise.resolve(e));
+
+      await service.createApiKey({ name: 'Script key' }, caller);
+
+      expect(repository.create).toHaveBeenCalledWith(expect.objectContaining({ ownerUserId: null }));
+    });
+
+    it('should refuse to issue a key stronger than the issuer', async () => {
+      const caller = createMockApiKey({ ownerUserId: 'user-a', role: ApiKeyRole.OPERATOR });
+
+      await expect(service.createApiKey({ name: 'Escalate', role: ApiKeyRole.ADMIN }, caller)).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(repository.save).not.toHaveBeenCalled();
+    });
+
+    it("should list only the account's own keys when scoped", async () => {
+      (repository.find as jest.Mock).mockResolvedValue([]);
+
+      await service.findAll('user-a');
+
+      expect(repository.find).toHaveBeenCalledWith(expect.objectContaining({ where: { ownerUserId: 'user-a' } }));
+    });
+
+    it("should hide another account's key behind a 404", async () => {
+      (repository.findOne as jest.Mock).mockResolvedValue(createMockApiKey({ ownerUserId: 'user-b' }));
+
+      await expect(service.findOne('key-1', 'user-a')).rejects.toThrow(NotFoundException);
+    });
+
+    it('should let an unrestricted caller read any key', async () => {
+      const key = createMockApiKey({ ownerUserId: 'user-b' });
+      (repository.findOne as jest.Mock).mockResolvedValue(key);
+
+      await expect(service.findOne('key-1', null)).resolves.toBe(key);
     });
   });
 });
