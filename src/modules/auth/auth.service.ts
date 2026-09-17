@@ -5,10 +5,24 @@ import { createHash, randomBytes } from 'crypto';
 import { existsSync, writeFileSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { ApiKey, ApiKeyRole } from './entities/api-key.entity';
+import { User } from './entities/user.entity';
 import { CreateApiKeyDto, UpdateApiKeyDto } from './dto';
+import { UserService } from './user.service';
 import { createLogger } from '../../common/services/logger.service';
 
 const API_KEY_FILE = join(process.cwd(), 'data', '.api-key');
+
+export interface DashboardLoginResult {
+  apiKey: string;
+  role: ApiKeyRole;
+  userId: string;
+  email: string;
+  subscription: {
+    plan: string;
+    expiresAt: Date | null;
+    daysRemaining: number | null;
+  };
+}
 
 @Injectable()
 export class AuthService implements OnModuleInit {
@@ -17,6 +31,7 @@ export class AuthService implements OnModuleInit {
   constructor(
     @InjectRepository(ApiKey, 'main')
     private readonly apiKeyRepository: Repository<ApiKey>,
+    private readonly userService: UserService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -170,22 +185,68 @@ export class AuthService implements OnModuleInit {
   }
 
   /**
-   * Validate dashboard email/password against env-configured credentials.
-   * On success returns the admin API key for the dashboard session.
+   * Validate dashboard email/password against the `users` table.
+   *
+   * DASHBOARD_EMAIL/DASHBOARD_PASSWORD are no longer an authentication path —
+   * UserService uses them only to seed the administrator row on first boot.
+   *
+   * Each account gets its own API key scoped to it (`ownerUserId`), so a
+   * non-admin login can never hand out the shared bootstrap admin key. Because
+   * only the key's hash is stored, the raw key has to be reissued on every
+   * login; the previous one stops working, which also means logging in
+   * elsewhere ends the older dashboard session.
    */
-  loginWithCredentials(email: string, password: string): { apiKey: string } {
-    const expectedEmail = (process.env.DASHBOARD_EMAIL || 'admin@rhalla.wa').trim().toLowerCase();
-    const expectedPassword = process.env.DASHBOARD_PASSWORD || 'changeme';
+  async loginWithCredentials(email: string, password: string): Promise<DashboardLoginResult> {
+    const { user, subscription } = await this.userService.validateCredentials(email, password);
+    const apiKey = await this.issueUserKey(user);
 
-    const emailOk = email.trim().toLowerCase() === expectedEmail;
-    const passwordOk = password === expectedPassword;
+    this.logger.log(`Dashboard login: ${user.email}`, {
+      userId: user.id,
+      role: user.role,
+      action: 'dashboard_login',
+    });
 
-    if (!emailOk || !passwordOk) {
-      this.logger.warn('Dashboard login failed', { action: 'dashboard_login_failed' });
-      throw new UnauthorizedException('Invalid email or password');
+    return {
+      apiKey,
+      role: user.role,
+      userId: user.id,
+      email: user.email,
+      subscription: {
+        plan: subscription.plan,
+        expiresAt: subscription.expiresAt,
+        daysRemaining: subscription.daysRemaining,
+      },
+    };
+  }
+
+  /**
+   * Issue (or rotate) the dashboard API key belonging to one user account.
+   * Keeps exactly one key per account, with the account's current role.
+   */
+  private async issueUserKey(user: User): Promise<string> {
+    const rawKey = `owa_k1_${randomBytes(32).toString('hex')}`;
+    const existing = await this.apiKeyRepository.findOne({
+      where: { ownerUserId: user.id },
+      order: { createdAt: 'ASC' },
+    });
+
+    const fields = {
+      name: `Dashboard (${user.email})`,
+      keyHash: this.hashKey(rawKey),
+      keyPrefix: rawKey.substring(0, 12),
+      role: user.role,
+      ownerUserId: user.id,
+      isActive: true,
+      expiresAt: null,
+    };
+
+    if (existing) {
+      await this.apiKeyRepository.save({ ...existing, ...fields });
+    } else {
+      await this.apiKeyRepository.save(this.apiKeyRepository.create(fields));
     }
 
-    return { apiKey: this.getDashboardKey() };
+    return rawKey;
   }
 
   async validateApiKey(rawKey: string, clientIp?: string, sessionId?: string): Promise<ApiKey> {

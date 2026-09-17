@@ -1,6 +1,6 @@
 import { Controller, Post, Body, Headers, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiHeader } from '@nestjs/swagger';
-import { AuthService } from './auth.service';
+import { AuthService, DashboardLoginResult } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { Public } from './decorators/auth.decorators';
 import { createLogger } from '../../common/services/logger.service';
@@ -39,11 +39,12 @@ export class AuthValidateController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Log in to the dashboard with email and password' })
-  @ApiResponse({ status: 200, description: 'Login successful; returns the dashboard API key' })
-  @ApiResponse({ status: 401, description: 'Invalid email or password' })
-  async login(@Body() dto: LoginDto): Promise<{ apiKey: string; role?: string }> {
-    const { apiKey } = this.authService.loginWithCredentials(dto.email, dto.password);
-    const keyEntity = await this.authService.validateApiKey(apiKey);
-    return { apiKey, role: keyEntity.role };
+  @ApiResponse({
+    status: 200,
+    description: 'Login successful; returns the account API key and its subscription state',
+  })
+  @ApiResponse({ status: 401, description: 'Invalid credentials, disabled account, or expired subscription' })
+  async login(@Body() dto: LoginDto): Promise<DashboardLoginResult> {
+    return this.authService.loginWithCredentials(dto.email, dto.password);
   }
 }

@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { UnauthorizedException, NotFoundException } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { AuthService } from './auth.service';
+import { UserService } from './user.service';
 import { ApiKey, ApiKeyRole } from './entities/api-key.entity';
 
 // Helpers
@@ -16,6 +17,7 @@ function createMockApiKey(overrides: Partial<ApiKey> = {}): ApiKey {
     keyHash: hashKey('test-key'),
     keyPrefix: 'test-key-pre',
     role: ApiKeyRole.OPERATOR,
+    ownerUserId: null,
     allowedIps: null,
     allowedSessions: null,
     isActive: true,
@@ -48,6 +50,11 @@ describe('AuthService', () => {
         {
           provide: getRepositoryToken(ApiKey, 'main'),
           useValue: repository,
+        },
+        {
+          // AuthService only delegates credential checks to UserService.
+          provide: UserService,
+          useValue: { validateCredentials: jest.fn() },
         },
       ],
     }).compile();

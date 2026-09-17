@@ -4,10 +4,13 @@ import { Repository, DataSource } from 'typeorm';
 import { NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { SessionService } from './session.service';
 import { Session, SessionStatus } from './entities/session.entity';
+import { Message } from '../message/entities/message.entity';
 import { EngineFactory } from '../../engine/engine.factory';
 import { EventsGateway } from '../events/events.gateway';
 import { WebhookService } from '../webhook/webhook.service';
 import { HookManager } from '../../core/hooks';
+import { StorageService } from '../../common/storage/storage.service';
+import { UserService } from '../auth/user.service';
 
 function createMockSession(overrides: Partial<Session> = {}): Session {
   return {
@@ -19,6 +22,7 @@ function createMockSession(overrides: Partial<Session> = {}): Session {
     config: {},
     proxyUrl: null,
     proxyType: null,
+    ownerUserId: null,
     connectedAt: null,
     lastActiveAt: null,
     createdAt: new Date(),
@@ -35,6 +39,9 @@ describe('SessionService', () => {
   let eventsGateway: jest.Mocked<Partial<EventsGateway>>;
   let webhookService: jest.Mocked<Partial<WebhookService>>;
   let hookManager: jest.Mocked<Partial<HookManager>>;
+  let messageRepository: jest.Mocked<Partial<Repository<Message>>>;
+  let storageService: jest.Mocked<Partial<StorageService>>;
+  let userService: jest.Mocked<Partial<UserService>>;
   let mockEngine: Record<string, jest.Mock>;
 
   beforeEach(async () => {
@@ -83,12 +90,33 @@ describe('SessionService', () => {
       execute: jest.fn().mockResolvedValue({ continue: true, data: {} }),
     };
 
+    messageRepository = {
+      find: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn(),
+      create: jest.fn().mockImplementation((entity: unknown) => entity),
+      save: jest.fn().mockImplementation((entity: unknown) => Promise.resolve(entity)),
+    };
+
+    storageService = {
+      uploadMedia: jest.fn().mockResolvedValue(null),
+    };
+
+    // Quota/subscription gate — permissive here; its own rules are covered in
+    // user.service.spec.ts.
+    userService = {
+      assertCanStartSession: jest.fn().mockResolvedValue(undefined),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SessionService,
         {
           provide: getRepositoryToken(Session, 'data'),
           useValue: repository,
+        },
+        {
+          provide: getRepositoryToken(Message, 'data'),
+          useValue: messageRepository,
         },
         {
           provide: getDataSourceToken('data'),
@@ -98,6 +126,8 @@ describe('SessionService', () => {
         { provide: EventsGateway, useValue: eventsGateway },
         { provide: WebhookService, useValue: webhookService },
         { provide: HookManager, useValue: hookManager },
+        { provide: StorageService, useValue: storageService },
+        { provide: UserService, useValue: userService },
       ],
     }).compile();
 
@@ -141,7 +171,7 @@ describe('SessionService', () => {
       const result = await service.findAll();
 
       expect(result).toHaveLength(2);
-      expect(repository.find).toHaveBeenCalledWith({ order: { createdAt: 'DESC' } });
+      expect(repository.find).toHaveBeenCalledWith({ where: {}, order: { createdAt: 'DESC' } });
     });
   });
 
@@ -368,6 +398,9 @@ describe('SessionService', () => {
 
   describe('onModuleInit', () => {
     it('should reset active sessions to DISCONNECTED on startup', async () => {
+      // onModuleInit first reads the sessions that were active before the
+      // restart (to decide what to auto-reconnect), then resets them all.
+      (repository.find as jest.Mock).mockResolvedValue([]);
       (repository.update as jest.Mock).mockResolvedValue({ affected: 3 });
 
       await service.onModuleInit();

@@ -21,6 +21,15 @@ export class ApiKey {
   @Column({ type: 'varchar', length: 8 })
   keyPrefix: string;
 
+  /**
+   * Owning user account, when this key was issued to one. null means a
+   * system/admin key (the bootstrap key in data/.api-key and any key created
+   * before user accounts existed), which is exempt from per-account quotas.
+   */
+  @Index()
+  @Column({ type: 'varchar', length: 36, nullable: true })
+  ownerUserId: string | null;
+
   @Column({
     type: 'varchar',
     length: 20,

@@ -1,4 +1,4 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 import { DateTransformer } from '../../../common/transformers/date.transformer';
 import { jsonColumnType, dateColumnType } from '../../../common/utils/column-types';
 
@@ -35,6 +35,16 @@ export class Session {
 
   @Column({ type: jsonColumnType(), default: '{}' })
   config: Record<string, unknown>;
+
+  /**
+   * Owning user account (users table on the 'main' connection — deliberately
+   * not a FK, the two tables can live in different databases). null means the
+   * session predates user accounts or was created by a system/admin key; such
+   * sessions are exempt from per-account session quotas.
+   */
+  @Index()
+  @Column({ type: 'varchar', length: 36, nullable: true })
+  ownerUserId: string | null;
 
   // Phase 3: Proxy per session
   @Column({ type: 'varchar', length: 255, nullable: true })

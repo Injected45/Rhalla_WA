@@ -6,6 +6,7 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
+import { UserService } from '../auth/user.service';
 import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
 import { Repository, In, DataSource } from 'typeorm';
 import { Session, SessionStatus } from './entities/session.entity';
@@ -48,6 +49,7 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
     private readonly webhookService: WebhookService,
     private readonly hookManager: HookManager,
     private readonly storageService: StorageService,
+    private readonly userService: UserService,
   ) {}
 
   /**
@@ -124,7 +126,9 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
     for (const session of toReconnect) {
       const sessionId = session.id;
       setTimeout(() => {
-        void this.start(sessionId).catch(err =>
+        // System-initiated: restores a session that was already running before
+        // the restart, so it bypasses the per-account quota check.
+        void this.start(sessionId, false).catch(err =>
           this.logger.error(`Auto-reconnect failed for session ${sessionId}`, String(err)),
         );
       }, delay);
@@ -133,14 +137,28 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
   }
 
   async onModuleDestroy(): Promise<void> {
-    // Clean up all engines on shutdown
-    for (const [sessionId, engine] of this.engines) {
-      this.logger.log(`Destroying engine for session ${sessionId}`, {
-        sessionId,
-        action: 'shutdown',
-      });
-      await engine.destroy();
-    }
+    // Clean up all engines on shutdown. Wrap each destroy in a per-engine
+    // timeout so a single unresponsive Chromium can't block the whole
+    // shutdown — that used to leave LocalAuth mid-write and produce the
+    // "stuck in authenticating" state on the next boot.
+    await Promise.all(
+      Array.from(this.engines.entries()).map(async ([sessionId, engine]) => {
+        this.logger.log(`Destroying engine for session ${sessionId}`, {
+          sessionId,
+          action: 'shutdown',
+        });
+        try {
+          await Promise.race([
+            engine.destroy(),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error('destroy timed out after 15s')), 15_000),
+            ),
+          ]);
+        } catch (err) {
+          this.logger.warn(`Engine destroy for ${sessionId} failed or timed out`, String(err));
+        }
+      }),
+    );
     this.engines.clear();
 
     // Clear all reconnect timers
@@ -152,7 +170,12 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
     this.reconnectStates.clear();
   }
 
-  async create(dto: CreateSessionDto): Promise<Session> {
+  /**
+   * @param ownerUserId account this session belongs to, resolved from the
+   *   caller's API key. null/undefined means a system or admin key with no
+   *   owner, which is exempt from per-account quotas.
+   */
+  async create(dto: CreateSessionDto, ownerUserId?: string | null): Promise<Session> {
     // Check if session with same name exists
     const existing = await this.sessionRepository.findOne({
       where: { name: dto.name },
@@ -162,12 +185,16 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
       throw new ConflictException(`Session with name '${dto.name}' already exists`);
     }
 
+    // Subscription must be live and the account must have a free session slot.
+    await this.userService.assertCanStartSession(ownerUserId);
+
     const session = this.sessionRepository.create({
       name: dto.name,
       config: dto.config || {},
       proxyUrl: dto.proxyUrl || null,
       proxyType: dto.proxyType || null,
       status: SessionStatus.CREATED,
+      ownerUserId: ownerUserId ?? null,
     });
 
     const saved = await this.dataSource.transaction(async manager => {
@@ -187,8 +214,13 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
     return saved;
   }
 
-  async findAll(): Promise<Session[]> {
+  /**
+   * @param ownerUserId when set, only that account's sessions are returned.
+   *   null/undefined means a system or admin key, which sees everything.
+   */
+  async findAll(ownerUserId?: string | null): Promise<Session[]> {
     return this.sessionRepository.find({
+      where: ownerUserId ? { ownerUserId } : {},
       order: { createdAt: 'DESC' },
     });
   }
@@ -246,11 +278,22 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
     });
   }
 
-  async start(id: string): Promise<Session> {
+  /**
+   * @param enforceQuota false for system-initiated starts (boot auto-reconnect),
+   *   which restore state that already existed and must not be blocked.
+   */
+  async start(id: string, enforceQuota = true): Promise<Session> {
     const session = await this.findOne(id);
 
     if (this.engines.has(id)) {
       throw new BadRequestException('Session is already started');
+    }
+
+    if (enforceQuota) {
+      // This session already holds a slot, so exclude it from the count —
+      // otherwise an account sitting exactly on its limit could never restart
+      // a session it owns.
+      await this.userService.assertCanStartSession(session.ownerUserId, session.id);
     }
 
     // Execute hook before starting
@@ -390,9 +433,9 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
             return;
           }
           // Dispatch to webhooks with potentially modified message
-          void this.webhookService.dispatch(id, 'message.received', finalMessage as Record<string, unknown>);
+          void this.webhookService.dispatch(id, 'message.received', finalMessage);
           // Emit real-time event to WebSocket clients
-          this.eventsGateway.emitMessage(id, finalMessage as Record<string, unknown>);
+          this.eventsGateway.emitMessage(id, finalMessage);
         })();
       },
       onMessageSent: (message): void => {
@@ -409,9 +452,9 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
           await this.uploadMessageMedia(id, message);
           const messageData = { ...message };
           // Dispatch outgoing message to webhooks (covers API sends and phone sends)
-          void this.webhookService.dispatch(id, 'message.sent', messageData as Record<string, unknown>);
+          void this.webhookService.dispatch(id, 'message.sent', messageData);
           // Emit real-time event to WebSocket clients
-          this.eventsGateway.emitMessage(id, messageData as Record<string, unknown>);
+          this.eventsGateway.emitMessage(id, messageData);
         })();
       },
       onDisconnected: (reason: string): void => {
@@ -595,7 +638,8 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
   /**
    * Get overall session statistics for multi-session monitoring
    */
-  async getStats(): Promise<{
+  /** Scoped to the caller's own sessions unless the key is system/admin. */
+  async getStats(ownerUserId?: string | null): Promise<{
     total: number;
     active: number;
     ready: number;
@@ -603,7 +647,7 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
     byStatus: Record<string, number>;
     memoryUsage: { heapUsed: number; heapTotal: number; rss: number };
   }> {
-    const sessions = await this.findAll();
+    const sessions = await this.findAll(ownerUserId);
     const byStatus: Record<string, number> = {};
 
     for (const session of sessions) {
@@ -612,9 +656,12 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
 
     const memory = process.memoryUsage();
 
+    // "active" counts running engines — for a tenant, only their own.
+    const active = ownerUserId ? sessions.filter(session => this.engines.has(session.id)).length : this.engines.size;
+
     return {
       total: sessions.length,
-      active: this.engines.size,
+      active,
       ready: byStatus[SessionStatus.READY] || 0,
       disconnected: byStatus[SessionStatus.DISCONNECTED] || 0,
       byStatus,
