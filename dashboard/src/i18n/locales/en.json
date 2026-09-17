@@ -666,7 +666,8 @@
       "expiresAtHint": "Leave empty for a subscription that never expires",
       "note": "Note",
       "notePlaceholder": "e.g. payment reference",
-      "isActive": "Account is active"
+      "isActive": "Account is active",
+      "roleOwnerHint": "The admin role belongs to the owner account and cannot be changed"
     },
     "create": {
       "title": "Add Account"

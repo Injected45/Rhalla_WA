@@ -379,24 +379,23 @@ describe('UserService', () => {
   // ── key/account state sync ────────────────────────────────────────
 
   describe('API key sync', () => {
-    const keyFor = (overrides: Partial<ApiKey> = {}): ApiKey =>
-      ({
-        id: 'key-1',
-        name: 'Dashboard (client@example.com)',
-        keyHash: 'hash',
-        keyPrefix: 'owa_k1_abcd',
-        role: ApiKeyRole.ADMIN,
-        ownerUserId: 'user-1',
-        allowedIps: null,
-        allowedSessions: null,
-        isActive: true,
-        expiresAt: null,
-        lastUsedAt: null,
-        usageCount: 0,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        ...overrides,
-      }) as ApiKey;
+    const keyFor = (overrides: Partial<ApiKey> = {}): ApiKey => ({
+      id: 'key-1',
+      name: 'Dashboard (client@example.com)',
+      keyHash: 'hash',
+      keyPrefix: 'owa_k1_abcd',
+      role: ApiKeyRole.ADMIN,
+      ownerUserId: 'user-1',
+      allowedIps: null,
+      allowedSessions: null,
+      isActive: true,
+      expiresAt: null,
+      lastUsedAt: null,
+      usageCount: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      ...overrides,
+    });
 
     it('should downgrade a live key when the account is demoted', async () => {
       (userRepository.findOne as jest.Mock).mockResolvedValue(createMockUser({ role: ApiKeyRole.ADMIN }));
@@ -426,6 +425,41 @@ describe('UserService', () => {
       await service.update('user-1', { maxSessions: 5 });
 
       expect(apiKeyRepository.save).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── admin role is the owner's alone ───────────────────────────────
+
+  describe('reserved admin role', () => {
+    it('should refuse to create another account with the admin role', async () => {
+      routeUserLookups(() => undefined);
+
+      await expect(
+        service.create({ email: 'someone@example.com', password: 'password-123', role: ApiKeyRole.ADMIN }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should refuse to promote an existing account to admin', async () => {
+      (userRepository.findOne as jest.Mock).mockResolvedValue(createMockUser({ email: 'someone@example.com' }));
+
+      await expect(service.update('user-1', { role: ApiKeyRole.ADMIN })).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should still allow operator and viewer', async () => {
+      (userRepository.findOne as jest.Mock).mockResolvedValue(createMockUser({ email: 'someone@example.com' }));
+      (subscriptionRepository.findOne as jest.Mock).mockResolvedValue(createMockSubscription());
+
+      await expect(service.update('user-1', { role: ApiKeyRole.VIEWER })).resolves.toBeDefined();
+    });
+
+    it('should allow the owner account itself to hold admin', async () => {
+      // DASHBOARD_EMAIL defaults to admin@rhalla.wa in tests.
+      (userRepository.findOne as jest.Mock).mockResolvedValue(
+        createMockUser({ email: 'admin@rhalla.wa', role: ApiKeyRole.ADMIN }),
+      );
+      (subscriptionRepository.findOne as jest.Mock).mockResolvedValue(createMockSubscription());
+
+      await expect(service.update('user-1', { role: ApiKeyRole.ADMIN })).resolves.toBeDefined();
     });
   });
 

@@ -34,7 +34,12 @@ import { PageHeader } from '../components/PageHeader';
 import { useToast } from '../components/Toast';
 import './Users.css';
 
-const roleNames: UserRoleName[] = ['admin', 'operator', 'viewer'];
+/**
+ * Roles that can be handed to an account. `admin` is deliberately absent: it
+ * belongs to the owner account (DASHBOARD_EMAIL) alone, which is what makes
+ * account management exclusive to it. The server rejects it too.
+ */
+const roleNames: UserRoleName[] = ['operator', 'viewer'];
 const planNames: SubscriptionPlan[] = ['trial', 'week', 'month', 'year', 'manual'];
 
 /** Mirrors PLAN_DURATION_DAYS on the server; null = caller decides. */
@@ -672,14 +677,18 @@ export function Users() {
                   <select
                     id="edit-role"
                     value={editForm.role}
+                    disabled={target.role === 'admin'}
                     onChange={e => setEditForm({ ...editForm, role: e.target.value as UserRoleName })}
                   >
-                    {roleNames.map(r => (
+                    {/* The owner keeps its own role listed so the select has a
+                        matching value; it is locked rather than editable. */}
+                    {(target.role === 'admin' ? (['admin'] as UserRoleName[]) : roleNames).map(r => (
                       <option key={r} value={r}>
                         {t(`users.roles.${r}`)}
                       </option>
                     ))}
                   </select>
+                  {target.role === 'admin' && <span className="field-hint">{t('users.fields.roleOwnerHint')}</span>}
                 </div>
                 <div className="field-col">
                   <label htmlFor="edit-max-sessions">{t('users.fields.maxSessions')}</label>

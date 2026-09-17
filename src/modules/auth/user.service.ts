@@ -194,6 +194,7 @@ export class UserService implements OnModuleInit {
     if (existing) {
       throw new ConflictException(`User with email '${email}' already exists`);
     }
+    this.assertRoleAssignable(email, dto.role);
 
     const user = await this.persistUser({
       email,
@@ -240,14 +241,30 @@ export class UserService implements OnModuleInit {
     return user;
   }
 
+  /** The owner account — account management belongs to this address alone. */
+  private ownerEmail(): string {
+    return (process.env.DASHBOARD_EMAIL || 'admin@rhalla.wa').trim().toLowerCase();
+  }
+
+  /**
+   * The admin role is the owner's alone. Every other account is a normal
+   * account with full access to the service but no account management, so the
+   * role must not be grantable to anyone else — the dashboard hides the option,
+   * and this is the backstop for direct API calls.
+   */
+  private assertRoleAssignable(email: string, role?: ApiKeyRole): void {
+    if (role !== ApiKeyRole.ADMIN) return;
+    if (email.trim().toLowerCase() === this.ownerEmail()) return;
+    throw new ForbiddenException('The admin role is reserved for the owner account');
+  }
+
   /**
    * The bootstrap administrator must stay an enabled admin, otherwise a single
    * bad request can lock everyone out of the dashboard with no way back in
    * short of editing the database by hand.
    */
   private assertNotLockingOutAdmin(user: User, next: { role?: ApiKeyRole; isActive?: boolean }): void {
-    const bootstrapEmail = (process.env.DASHBOARD_EMAIL || 'admin@rhalla.wa').trim().toLowerCase();
-    if (user.email !== bootstrapEmail) return;
+    if (user.email !== this.ownerEmail()) return;
 
     if (next.isActive === false) {
       throw new ForbiddenException('The administrator account cannot be disabled');
@@ -288,6 +305,7 @@ export class UserService implements OnModuleInit {
   async update(id: string, dto: UpdateUserDto): Promise<UserWithUsage> {
     const user = await this.getEntity(id);
     this.assertNotLockingOutAdmin(user, { role: dto.role, isActive: dto.isActive });
+    this.assertRoleAssignable(user.email, dto.role);
 
     if (dto.fullName !== undefined) user.fullName = dto.fullName;
     if (dto.role !== undefined) user.role = dto.role;
