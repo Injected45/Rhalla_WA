@@ -14,10 +14,14 @@ const Sessions = lazy(() => import('./pages/Sessions').then(m => ({ default: m.S
 const Webhooks = lazy(() => import('./pages/Webhooks').then(m => ({ default: m.Webhooks })));
 const Logs = lazy(() => import('./pages/Logs').then(m => ({ default: m.Logs })));
 const ApiKeys = lazy(() => import('./pages/ApiKeys').then(m => ({ default: m.ApiKeys })));
+const Users = lazy(() => import('./pages/Users').then(m => ({ default: m.Users })));
 const MessageTester = lazy(() => import('./pages/MessageTester').then(m => ({ default: m.MessageTester })));
 const Messages = lazy(() => import('./pages/Messages').then(m => ({ default: m.Messages })));
 const Groups = lazy(() => import('./pages/Groups').then(m => ({ default: m.Groups })));
 const Contacts = lazy(() => import('./pages/Contacts').then(m => ({ default: m.Contacts })));
+const Channels = lazy(() => import('./pages/Channels').then(m => ({ default: m.Channels })));
+const Status = lazy(() => import('./pages/Status').then(m => ({ default: m.Status })));
+const Catalog = lazy(() => import('./pages/Catalog').then(m => ({ default: m.Catalog })));
 const Infrastructure = lazy(() => import('./pages/Infrastructure').then(m => ({ default: m.Infrastructure })));
 const Plugins = lazy(() => import('./pages/Plugins'));
 
@@ -32,17 +36,25 @@ const queryClient = new QueryClient({
 });
 
 function AppContent() {
-  // Initialize from sessionStorage to avoid setState in effect
-  const savedKey = sessionStorage.getItem('openwa_api_key');
+  // Initialize from localStorage to avoid setState in effect
+  const savedKey = localStorage.getItem('openwa_api_key');
   const [isAuthenticated, setIsAuthenticated] = useState(!!savedKey);
   const [, setApiKey] = useState(savedKey || '');
   const { setRole, role } = useRole();
 
-  const handleLogin = async (key: string) => {
+  // POST /auth/login now returns the account's role alongside the key, so the
+  // usual case needs no second round-trip; the validate call is only a fallback
+  // for an older server response that omits it.
+  const handleLogin = async (key: string, loginRole?: UserRole) => {
     setApiKey(key);
-    sessionStorage.setItem('openwa_api_key', key);
+    localStorage.setItem('openwa_api_key', key);
 
-    // Fetch the role from API
+    if (loginRole) {
+      setRole(loginRole);
+      setIsAuthenticated(true);
+      return;
+    }
+
     try {
       const response = await fetch('/api/auth/validate', {
         method: 'POST',
@@ -64,7 +76,7 @@ function AppContent() {
     setApiKey('');
     setIsAuthenticated(false);
     setRole(null);
-    sessionStorage.removeItem('openwa_api_key');
+    localStorage.removeItem('openwa_api_key');
   };
 
   // Re-validate and get role on mount if already authenticated
@@ -106,12 +118,16 @@ function AppContent() {
             <Route path="sessions" element={<Sessions />} />
             <Route path="webhooks" element={<Webhooks />} />
             {role === 'admin' && <Route path="api-keys" element={<ApiKeys />} />}
-            <Route path="logs" element={<Logs />} />
+            {role === 'admin' && <Route path="users" element={<Users />} />}
+            {role === 'admin' && <Route path="logs" element={<Logs />} />}
             <Route path="message-tester" element={<MessageTester />} />
             <Route path="messages" element={<Messages />} />
             <Route path="groups" element={<Groups />} />
             <Route path="contacts" element={<Contacts />} />
-            <Route path="infrastructure" element={<Infrastructure />} />
+            <Route path="channels" element={<Channels />} />
+            <Route path="status" element={<Status />} />
+            <Route path="catalog" element={<Catalog />} />
+            {role === 'admin' && <Route path="infrastructure" element={<Infrastructure />} />}
             {role === 'admin' && <Route path="plugins" element={<Plugins />} />}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>

@@ -53,6 +53,13 @@
     "system": "System",
     "label": "Theme: {{value}}"
   },
+  "apiCode": {
+    "title": "API Request",
+    "hint": "Code for this request, reflecting the current inputs. Replace YOUR_API_KEY with your key.",
+    "copy": "Copy",
+    "copied": "Copied",
+    "dev": "View API code"
+  },
   "nav": {
     "dashboard": "Dashboard",
     "sessions": "Sessions",
@@ -62,9 +69,13 @@
     "messages": "Messages",
     "groups": "Groups",
     "contacts": "Contacts",
+    "channels": "Channels",
+    "status": "Status",
+    "catalog": "Catalog",
     "infrastructure": "Infrastructure",
     "plugins": "Plugins",
-    "logs": "Logs"
+    "logs": "Logs",
+    "users": "Accounts"
   },
   "messages": {
     "title": "Messages",
@@ -87,7 +98,44 @@
       "from": "From",
       "to": "To",
       "type": "Type",
-      "body": "Message"
+      "body": "Message",
+      "actions": "Actions"
+    },
+    "status": {
+      "sent": "Sent",
+      "delivered": "Delivered",
+      "read": "Read"
+    },
+    "actions": {
+      "reply": "Reply",
+      "forward": "Forward",
+      "react": "React",
+      "removeReaction": "Remove reaction",
+      "noReactions": "No reactions yet",
+      "unavailable": "Not available for this message",
+      "delete": "Delete"
+    },
+    "modal": {
+      "replyLabel": "Reply text",
+      "replyPlaceholder": "Type your reply…",
+      "forwardLabel": "Forward to chat",
+      "forwardPlaceholder": "Select a chat…",
+      "deleteConfirm": "Are you sure you want to delete this message?",
+      "deleteForEveryone": "Delete for everyone"
+    },
+    "toasts": {
+      "replySent": "Reply sent",
+      "forwarded": "Message forwarded",
+      "deleted": "Message deleted",
+      "reacted": "Reaction added",
+      "reactionRemoved": "Reaction removed",
+      "actionFailed": "Action failed"
+    },
+    "pagination": {
+      "prev": "Previous",
+      "next": "Next",
+      "pageOf": "Page {{page}} of {{total}}",
+      "total": "{{count}} messages"
     },
     "empty": {
       "title": "No messages yet",
@@ -109,8 +157,11 @@
       "name": "Name",
       "id": "Group ID",
       "members": "Members",
+      "messages": "Messages seen",
       "view": "View",
-      "empty": "No groups loaded. Click \"Load groups\"."
+      "empty": "No groups loaded. Click \"Load groups\".",
+      "fallbackTitle": "Showing a degraded list (WhatsApp Web incompatibility)",
+      "fallbackHint": "The full group listing is temporarily broken upstream (whatsapp-web.js can't reflect into the renamed WA Web modules). We're showing groups derived from recent messages instead — real group names, participant counts, and admin flags aren't available in this mode."
     },
     "detail": {
       "name": "Name",
@@ -127,6 +178,52 @@
       "owner": "Owner",
       "admin": "Admin",
       "member": "Member"
+    },
+    "manage": {
+      "actions": "Actions",
+      "editName": "Edit name",
+      "editDescription": "Edit description",
+      "inviteLink": "Invite link",
+      "leave": "Leave group",
+      "addParticipants": "Add",
+      "addPlaceholder": "Add by number, e.g. +62812...",
+      "promote": "Promote to admin",
+      "demote": "Demote from admin",
+      "remove": "Remove from group",
+      "create": {
+        "title": "Create a group",
+        "hint": "Create a new WhatsApp group with an initial set of members.",
+        "name": "Group name",
+        "namePlaceholder": "e.g. Project Team",
+        "participants": "Participants",
+        "participantsHint": "Phone numbers separated by commas or new lines.",
+        "button": "Create group"
+      },
+      "modal": {
+        "subjectTitle": "Edit group name",
+        "descriptionTitle": "Edit description",
+        "inviteTitle": "Group invite link",
+        "leaveTitle": "Leave group",
+        "removeParticipantTitle": "Remove participant",
+        "subjectLabel": "Group name",
+        "descriptionLabel": "Description",
+        "inviteLabel": "Invite link",
+        "leaveConfirm": "Are you sure you want to leave this group?",
+        "removeConfirm": "Remove {{participant}} from this group?",
+        "revoke": "Revoke & regenerate"
+      },
+      "toasts": {
+        "created": "Group created",
+        "added": "Participants added",
+        "removed": "Participant removed",
+        "promoted": "Participant promoted to admin",
+        "demoted": "Participant demoted from admin",
+        "subjectUpdated": "Group name updated",
+        "descriptionUpdated": "Description updated",
+        "left": "Left the group",
+        "revoked": "Invite link revoked",
+        "failed": "Action failed"
+      }
     }
   },
   "contacts": {
@@ -138,7 +235,8 @@
       "hint": "Enter a phone number (with country code, no +) to see if it has WhatsApp.",
       "button": "Check",
       "exists": "{{number}} is on WhatsApp ✓",
-      "notExists": "{{number}} is NOT on WhatsApp"
+      "notExists": "{{number}} is NOT on WhatsApp",
+      "resultLabel": "Result:"
     },
     "all": {
       "title": "All contacts",
@@ -151,6 +249,121 @@
       "yes": "Yes",
       "empty": "No contacts loaded. Click \"Load contacts\".",
       "truncated": "Showing first 500 of {{count}}. Use search to narrow down."
+    },
+    "labels": {
+      "title": "Labels",
+      "hint": "Manage chat labels (WhatsApp Business accounts only).",
+      "loadButton": "Load labels",
+      "none": "No labels found. Labels are only available on WhatsApp Business accounts.",
+      "viewButton": "View labels",
+      "chatLabels": "Labels on this chat",
+      "noChatLabels": "This chat has no labels.",
+      "remove": "Remove label",
+      "selectLabel": "Select a label…",
+      "addButton": "Add",
+      "toasts": {
+        "added": "Label added",
+        "removed": "Label removed",
+        "failed": "Action failed"
+      }
+    }
+  },
+  "channels": {
+    "title": "Channels",
+    "subtitle": "Subscribe to and browse WhatsApp channels",
+    "noSessions": "No connected sessions",
+    "unsubscribeConfirm": "Unsubscribe from \"{{name}}\"?",
+    "subscribe": {
+      "title": "Subscribe to a channel",
+      "hint": "Enter a channel invite code (from its share link) to subscribe.",
+      "placeholder": "Channel invite code",
+      "button": "Subscribe"
+    },
+    "list": {
+      "title": "Subscribed channels",
+      "button": "Load channels",
+      "empty": "No channels loaded. Click \"Load channels\".",
+      "subscribers": "{{count}} subscribers",
+      "viewMessages": "Messages",
+      "hideMessages": "Hide messages",
+      "noMessages": "No messages in this channel.",
+      "mediaMessage": "[media]",
+      "unsubscribe": "Unsubscribe"
+    },
+    "toasts": {
+      "subscribed": "Subscribed to channel",
+      "unsubscribed": "Unsubscribed from channel",
+      "failed": "Action failed"
+    }
+  },
+  "status": {
+    "title": "Status",
+    "subtitle": "Post status updates and view contacts' stories",
+    "noSessions": "No connected sessions",
+    "deleteConfirm": "Delete this status? Only your own statuses can be deleted.",
+    "post": {
+      "title": "Post a status",
+      "hint": "Share a text, image, or video status to your contacts.",
+      "types": {
+        "text": "Text",
+        "image": "Image",
+        "video": "Video"
+      },
+      "text": "Text",
+      "backgroundColor": "Background color",
+      "font": "Font",
+      "mediaUrl": "Media URL",
+      "caption": "Caption",
+      "button": "Post status"
+    },
+    "list": {
+      "title": "Status updates",
+      "button": "Load statuses",
+      "empty": "No statuses loaded. Click \"Load statuses\".",
+      "media": "[media]",
+      "delete": "Delete status"
+    },
+    "toasts": {
+      "posted": "Status posted",
+      "deleted": "Status deleted",
+      "failed": "Action failed"
+    }
+  },
+  "catalog": {
+    "title": "Catalog",
+    "subtitle": "Browse business products and send them to chats",
+    "noSessions": "No connected sessions",
+    "info": {
+      "title": "Catalog",
+      "button": "Load catalog",
+      "name": "Name",
+      "productCount": "Products",
+      "description": "Description",
+      "url": "Catalog URL",
+      "empty": "No catalog loaded. Click \"Load catalog\".",
+      "sendChatPlaceholder": "Send catalog to chat (e.g. 62812xxxx@c.us)",
+      "sendButton": "Send catalog"
+    },
+    "products": {
+      "title": "Products",
+      "button": "Load products",
+      "empty": "No products loaded. Click \"Load products\".",
+      "available": "Available",
+      "unavailable": "Unavailable",
+      "send": "Send",
+      "prev": "Previous",
+      "next": "Next",
+      "pageOf": "Page {{page}} of {{total}}"
+    },
+    "send": {
+      "title": "Send \"{{name}}\"",
+      "chatId": "Chat ID",
+      "body": "Message"
+    },
+    "toasts": {
+      "productSent": "Product sent",
+      "catalogSent": "Catalog sent",
+      "failed": "Action failed"
     }
   },
   "errorBoundary": {
@@ -170,7 +383,9 @@
     "connecting": "Signing in...",
     "connectionError": "Unable to connect to server. Please try again.",
     "footer": "Rhalla Wa · WhatsApp API Gateway",
-    "version": "v{{version}} · {{date}}"
+    "version": "v{{version}} · {{date}}",
+    "subscriptionExpired": "Your subscription has expired. Contact the administrator to renew it.",
+    "accountDisabled": "This account has been disabled. Contact the administrator."
   },
   "dashboard": {
     "title": "Dashboard",
@@ -383,6 +598,124 @@
       "delete": "Delete"
     }
   },
+  "users": {
+    "title": "Accounts",
+    "subtitle": "Create accounts, set their subscription, and cap how many WhatsApp sessions each one may run",
+    "createBtn": "Add Account",
+    "plansTitle": "Plans Reference",
+    "plans": {
+      "trial": "Trial",
+      "week": "Week",
+      "month": "Month",
+      "year": "Year",
+      "manual": "Manual"
+    },
+    "planDescriptions": {
+      "trial": "3 days from today",
+      "week": "7 days from today",
+      "month": "30 days from today",
+      "year": "365 days from today",
+      "manual": "Pick an exact end date, or leave it open for no expiry"
+    },
+    "roles": {
+      "admin": "Admin",
+      "operator": "Operator",
+      "viewer": "Viewer"
+    },
+    "columns": {
+      "account": "Account",
+      "role": "Role",
+      "subscription": "Subscription",
+      "sessions": "Sessions",
+      "status": "Status",
+      "lastLogin": "Last Login",
+      "actions": "Actions"
+    },
+    "statuses": {
+      "active": "Active",
+      "disabled": "Disabled"
+    },
+    "subscription": {
+      "none": "No subscription",
+      "unlimited": "No expiry",
+      "daysLeft": "{{count}} day left",
+      "daysLeft_plural": "{{count}} days left",
+      "expiredOn": "Expired {{date}}",
+      "endsOn": "Ends on {{date}}"
+    },
+    "sessions": {
+      "unlimitedUsage": "{{used}} · unlimited",
+      "hint": "A session limit of 0 means unlimited. An account at its limit cannot create or start another session until one is deleted or the limit is raised."
+    },
+    "fields": {
+      "email": "Email",
+      "emailPlaceholder": "client@example.com",
+      "password": "Password",
+      "passwordPlaceholder": "At least {{count}} characters",
+      "newPassword": "New password",
+      "fullName": "Display name",
+      "fullNamePlaceholder": "e.g. Acme Trading",
+      "role": "Role",
+      "maxSessions": "Session limit",
+      "maxSessionsHint": "0 = unlimited",
+      "plan": "Plan",
+      "days": "Custom days",
+      "daysHint": "Overrides the plan length",
+      "daysUnlimited": "No expiry",
+      "expiresAt": "End date",
+      "expiresAtHint": "Leave empty for a subscription that never expires",
+      "note": "Note",
+      "notePlaceholder": "e.g. payment reference",
+      "isActive": "Account is active"
+    },
+    "create": {
+      "title": "Add Account"
+    },
+    "edit": {
+      "title": "Edit {{email}}",
+      "usage": "Currently using {{used}} session(s)."
+    },
+    "subscriptionModal": {
+      "title": "Subscription · {{email}}",
+      "assign": "Assign Subscription",
+      "replaceHint": "This replaces the current subscription. The previous one is kept in the account history as cancelled."
+    },
+    "password": {
+      "title": "Reset password · {{email}}",
+      "submit": "Reset Password",
+      "hint": "The account holder will need the new password to sign in. Any dashboard session they have open keeps working until they sign in again."
+    },
+    "disable": {
+      "title": "Disable Account",
+      "message": "Disable <strong>{{email}}</strong>? They will not be able to sign in or start sessions.",
+      "hint": "The account is kept, not deleted, so its sessions and subscription history survive. You can re-enable it from Edit.",
+      "submit": "Disable"
+    },
+    "actions": {
+      "edit": "Edit account",
+      "subscription": "Change subscription",
+      "cancelSubscription": "Cancel subscription",
+      "password": "Reset password",
+      "disable": "Disable account"
+    },
+    "toasts": {
+      "created": "Account {{email}} created",
+      "updated": "Account {{email}} updated",
+      "subscriptionAssigned": "Subscription updated for {{email}}",
+      "subscriptionCancelled": "Subscription cancelled for {{email}}",
+      "passwordReset": "Password reset for {{email}}",
+      "disabled": "Account {{email}} disabled"
+    },
+    "errors": {
+      "emailRequired": "Email is required",
+      "passwordTooShort": "Password must be at least {{count}} characters",
+      "invalidDays": "Days must be a whole number of 1 or more"
+    },
+    "empty": {
+      "title": "No accounts yet",
+      "description": "Add an account to give someone their own sessions and subscription"
+    }
+  },
   "logs": {
     "title": "Audit Logs",
     "subtitle": "Track and review all API actions and system events",
@@ -430,7 +763,23 @@
       "image": "Image",
       "video": "Video",
       "audio": "Audio",
-      "document": "Document"
+      "document": "Document",
+      "location": "Location",
+      "contact": "Contact"
+    },
+    "location": {
+      "latitude": "Latitude",
+      "longitude": "Longitude",
+      "description": "Description",
+      "descriptionPlaceholder": "e.g. Office HQ",
+      "address": "Address",
+      "addressPlaceholder": "e.g. 123 Main St, City"
+    },
+    "contact": {
+      "name": "Contact Name",
+      "namePlaceholder": "e.g. John Doe",
+      "number": "Contact Number",
+      "numberHint": "Phone number in international format"
     },
     "messageContent": "Message Content",
     "messagePlaceholder": "Enter your message here...",
@@ -439,18 +788,37 @@
     "filename": "Filename",
     "captionPlaceholder": "Enter caption...",
     "filenamePlaceholder": "document.pdf",
+    "mediaSource": {
+      "label": "Media Source",
+      "url": "URL",
+      "file": "Upload from PC"
+    },
+    "file": {
+      "label": "Select a file",
+      "pick": "Click to choose a file",
+      "clear": "Remove file",
+      "hint": "The file is read locally and sent as base64. Max ~50 MB."
+    },
     "send": "Send Message",
     "sending": "Sending...",
     "viewOnly": "View Only",
     "responseEmpty": "Send a message to see the API response",
     "successLabel": "200 OK - Success",
     "failedLabel": "400 - Failed",
+    "unconfirmedLabel": "200 OK - Sent (unconfirmed)",
+    "unconfirmedHint": "The message was delivered to WhatsApp, but the engine could not return a message ID for correlation. This is a known WhatsApp Web quirk — treat as sent.",
     "response": {
       "timestamp": "Timestamp",
       "messageId": "Message ID",
       "error": "Error"
     },
-    "sendFailed": "Failed to send message"
+    "sendFailed": "Failed to send message",
+    "api": {
+      "title": "API",
+      "hint": "Code for this request in your language — it updates live with the form above. Replace YOUR_API_KEY with your key.",
+      "copy": "Copy",
+      "copied": "Copied"
+    }
   },
   "infrastructure": {
     "title": "Infrastructure",
@@ -565,6 +933,7 @@
     "running": "Running",
     "supportedFeatures": "Supported Features:",
     "more": "+{{count}} more",
+    "showLess": "Show less",
     "builtIn": "Built-in",
     "noDescription": "No description available",
     "required": "Required",
@@ -574,9 +943,24 @@
     "disable": "Disable",
     "healthCheck": "Health Check",
     "configure": "Configure",
+    "details": "Details",
     "empty": {
       "title": "No Plugins Found",
       "description": "Install plugins to extend OpenWA functionality"
+    },
+    "detailsModal": {
+      "title": "{{name}} Details",
+      "id": "ID",
+      "version": "Version",
+      "type": "Type",
+      "status": "Status",
+      "author": "Author",
+      "loadedAt": "Loaded At",
+      "enabledAt": "Enabled At",
+      "provides": "Provides",
+      "error": "Error",
+      "config": "Configuration",
+      "notSet": "Not set"
     },
     "config": {
       "title": "Configure {{name}}",
@@ -597,7 +981,8 @@
       "healthError": "Health Check Error",
       "savedTitle": "Configuration Saved",
       "savedDesc": "Server restart required to apply changes.",
-      "saveFailed": "Save Failed"
+      "saveFailed": "Save Failed",
+      "detailsError": "Failed to Load Details"
     }
   }
 }

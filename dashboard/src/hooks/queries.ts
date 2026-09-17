@@ -6,7 +6,11 @@ import {
   auditApi,
   infraApi,
   pluginsApi,
+  userApi,
   type Webhook,
+  type CreateUserPayload,
+  type UpdateUserPayload,
+  type AssignSubscriptionPayload,
 } from '../services/api';
 
 // ── Query Keys ────────────────────────────────────────────────────────
@@ -17,6 +21,7 @@ export const queryKeys = {
   sessionGroups: (sessionId: string) => ['sessions', sessionId, 'groups'] as const,
   webhooks: ['webhooks'] as const,
   apiKeys: ['apiKeys'] as const,
+  users: ['users'] as const,
   logs: (params: { severity?: string; page: number; limit: number }) =>
     ['logs', params] as const,
   infraStatus: ['infra', 'status'] as const,
@@ -176,6 +181,55 @@ export function useRevokeApiKeyMutation() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.apiKeys });
     },
   });
+}
+
+// ── User Queries (admin only) ─────────────────────────────────────────
+
+export function useUsersQuery(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.users,
+    queryFn: userApi.list,
+    staleTime: 30_000,
+    enabled,
+  });
+}
+
+/** Accounts own sessions, so their list is refreshed alongside the user list. */
+function useUserMutation<TArgs, TResult>(mutationFn: (args: TArgs) => Promise<TResult>) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.users });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.apiKeys });
+    },
+  });
+}
+
+export function useCreateUserMutation() {
+  return useUserMutation((data: CreateUserPayload) => userApi.create(data));
+}
+
+export function useUpdateUserMutation() {
+  return useUserMutation(({ id, data }: { id: string; data: UpdateUserPayload }) => userApi.update(id, data));
+}
+
+export function useResetUserPasswordMutation() {
+  return useUserMutation(({ id, password }: { id: string; password: string }) => userApi.resetPassword(id, password));
+}
+
+export function useAssignSubscriptionMutation() {
+  return useUserMutation(({ id, data }: { id: string; data: AssignSubscriptionPayload }) =>
+    userApi.assignSubscription(id, data),
+  );
+}
+
+export function useCancelSubscriptionMutation() {
+  return useUserMutation((id: string) => userApi.cancelSubscription(id));
+}
+
+export function useDeactivateUserMutation() {
+  return useUserMutation((id: string) => userApi.deactivate(id));
 }
 
 // ── Logs Queries ──────────────────────────────────────────────────────

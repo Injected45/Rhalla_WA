@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Eye, EyeOff } from 'lucide-react';
+import type { LoginResult, UserRoleName } from '../services/api';
 import './Login.css';
 
 interface LoginProps {
-  onLogin: (apiKey: string) => void;
+  onLogin: (apiKey: string, role?: UserRoleName) => void;
 }
 
 export function Login({ onLogin }: LoginProps) {
@@ -14,6 +15,20 @@ export function Login({ onLogin }: LoginProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+
+  /**
+   * The API rejects a login for three different reasons and its messages are
+   * English-only, so map the known ones onto translated strings and fall back
+   * to whatever the server said.
+   */
+  const translateLoginError = (message?: string): string => {
+    if (!message) return t('login.invalidCredentials');
+    const lower = message.toLowerCase();
+    if (lower.includes('subscription')) return t('login.subscriptionExpired');
+    if (lower.includes('disabled')) return t('login.accountDisabled');
+    if (lower.includes('invalid email or password')) return t('login.invalidCredentials');
+    return message;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,15 +51,15 @@ export function Login({ onLogin }: LoginProps) {
       });
 
       if (response.ok) {
-        const data = await response.json();
+        const data = (await response.json()) as Partial<LoginResult>;
         if (data?.apiKey) {
-          onLogin(data.apiKey);
+          onLogin(data.apiKey, data.role);
         } else {
           setError(t('login.invalidCredentials'));
         }
       } else {
-        const errorData = await response.json().catch(() => ({}));
-        setError(errorData.message || t('login.invalidCredentials'));
+        const errorData = (await response.json().catch(() => ({}))) as { message?: string };
+        setError(translateLoginError(errorData.message));
       }
     } catch {
       setError(t('login.connectionError'));
