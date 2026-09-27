@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import {
   useReactTable,
@@ -7,7 +7,20 @@ import {
   createColumnHelper,
   type VisibilityState,
 } from '@tanstack/react-table';
-import { Plus, Copy, RefreshCw, Trash2, Eye, EyeOff, Loader2, X, Check, KeyRound, AlertTriangle } from 'lucide-react';
+import {
+  Plus,
+  Copy,
+  RefreshCw,
+  RotateCw,
+  Trash2,
+  Eye,
+  EyeOff,
+  Loader2,
+  X,
+  Check,
+  KeyRound,
+  AlertTriangle,
+} from 'lucide-react';
 import type { ApiKey } from '../services/api';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { useRole, type UserRole } from '../hooks/useRole';
@@ -16,6 +29,7 @@ import {
   useCreateApiKeyMutation,
   useDeleteApiKeyMutation,
   useRevokeApiKeyMutation,
+  useRegenerateApiKeyMutation,
 } from '../hooks/queries';
 import { PageHeader } from '../components/PageHeader';
 import './ApiKeys.css';
@@ -48,14 +62,20 @@ export function ApiKeys() {
   const { t } = useTranslation();
   useDocumentTitle(t('apiKeys.title'));
   const { role } = useRole();
+  // The key this browser is signed in with. Revoking it would lock the user
+  // out of the dashboard, so its destructive actions are replaced by a badge.
+  const storedKey = localStorage.getItem('openwa_api_key') || '';
+
   const { data: apiKeys = [], isLoading: loading } = useApiKeysQuery();
   const createMutation = useCreateApiKeyMutation();
   const deleteMutation = useDeleteApiKeyMutation();
   const revokeMutation = useRevokeApiKeyMutation();
+  const regenerateMutation = useRegenerateApiKeyMutation();
   const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set());
   const [showModal, setShowModal] = useState(false);
   const [newKey, setNewKey] = useState({ name: '', role: 'operator' });
   const [createdKey, setCreatedKey] = useState<string | null>(null);
+  const [wasRotated, setWasRotated] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ type: 'delete' | 'revoke'; id: string; name: string } | null>(
     null,
@@ -74,12 +94,29 @@ export function ApiKeys() {
     if (!newKey.name) return;
     try {
       const created = await createMutation.mutateAsync({ name: newKey.name, role: newKey.role });
+      setWasRotated(false);
       setCreatedKey(created.apiKey || null);
       setNewKey({ name: '', role: 'operator' });
     } catch (err) {
       console.error('Failed to create:', err);
     }
   };
+
+  // The stored key is only a hash, so a lost secret can never be read back —
+  // rotating it is the only way to recover access. Shown once, like creation.
+  const handleRegenerate = useCallback(
+    async (id: string) => {
+      try {
+        const rotated = await regenerateMutation.mutateAsync(id);
+        setWasRotated(true);
+        setCreatedKey(rotated.apiKey || null);
+        setShowModal(true);
+      } catch (err) {
+        console.error('Failed to regenerate:', err);
+      }
+    },
+    [regenerateMutation],
+  );
 
   const handleRevoke = async (id: string) => {
     try {
@@ -168,35 +205,45 @@ export function ApiKeys() {
           const apiKey = info.row.original;
           return (
             <span className="actions-cell">
-              <button
-                className="icon-btn"
-                onClick={() => copyToClipboard(apiKey.keyPrefix, apiKey.id)}
-                title={t('apiKeys.actions.copy')}
-              >
-                {copied === apiKey.id ? <Check size={16} /> : <Copy size={16} />}
-              </button>
-              {apiKey.isActive && (
-                <button
-                  className="icon-btn"
-                  onClick={() => setConfirmAction({ type: 'revoke', id: apiKey.id, name: apiKey.name })}
-                  title={t('apiKeys.actions.revoke')}
-                >
-                  <RefreshCw size={16} />
-                </button>
+              {apiKey.keyPrefix.length > 0 && storedKey.startsWith(apiKey.keyPrefix) ? (
+                // Revoking or deleting this row would lock the user out of the
+                // dashboard, so offer a label instead of the two traps.
+                <span className="permission-badge">{t('apiKeys.currentSession')}</span>
+              ) : (
+                <>
+                  {/* The stored secret is only a hash, so it cannot be copied
+                      back — rotation is how a lost key is recovered. */}
+                  <button
+                    className="icon-btn"
+                    onClick={() => void handleRegenerate(apiKey.id)}
+                    title={t('apiKeys.actions.regenerate')}
+                  >
+                    <RotateCw size={16} />
+                  </button>
+                  {apiKey.isActive && (
+                    <button
+                      className="icon-btn"
+                      onClick={() => setConfirmAction({ type: 'revoke', id: apiKey.id, name: apiKey.name })}
+                      title={t('apiKeys.actions.revoke')}
+                    >
+                      <RefreshCw size={16} />
+                    </button>
+                  )}
+                  <button
+                    className="icon-btn danger"
+                    onClick={() => setConfirmAction({ type: 'delete', id: apiKey.id, name: apiKey.name })}
+                    title={t('apiKeys.actions.delete')}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </>
               )}
-              <button
-                className="icon-btn danger"
-                onClick={() => setConfirmAction({ type: 'delete', id: apiKey.id, name: apiKey.name })}
-                title={t('apiKeys.actions.delete')}
-              >
-                <Trash2 size={16} />
-              </button>
             </span>
           );
         },
       }),
     ],
-    [visibleKeys, copied, t],
+    [visibleKeys, storedKey, handleRegenerate, t],
   );
 
   const table = useReactTable({
@@ -244,7 +291,11 @@ export function ApiKeys() {
         >
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>{createdKey ? t('apiKeys.createdTitle') : t('apiKeys.modalTitle')}</h2>
+              <h2>
+                {createdKey
+                  ? t(wasRotated ? 'apiKeys.regeneratedTitle' : 'apiKeys.createdTitle')
+                  : t('apiKeys.modalTitle')}
+              </h2>
               <button
                 className="btn-icon"
                 onClick={() => {
@@ -258,7 +309,9 @@ export function ApiKeys() {
             <div className="modal-body">
               {createdKey ? (
                 <div>
-                  <p style={{ marginBottom: '1rem', color: 'var(--text-muted)' }}>{t('apiKeys.createdHint')}</p>
+                  <p style={{ marginBottom: '1rem', color: 'var(--text-muted)' }}>
+                    {t(wasRotated ? 'apiKeys.regeneratedHint' : 'apiKeys.createdHint')}
+                  </p>
                   <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                     <code
                       style={{

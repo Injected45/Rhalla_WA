@@ -289,6 +289,11 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
       throw new BadRequestException('Session is already started');
     }
 
+    // An explicit start supersedes any scheduled reconnect. Without this the
+    // pending timer would fire later and launch a second engine against the
+    // same LocalAuth profile, which corrupts it.
+    this.cancelReconnect(id);
+
     if (enforceQuota) {
       // This session already holds a slot, so exclude it from the count —
       // otherwise an account sitting exactly on its limit could never restart
@@ -475,6 +480,13 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
         );
 
         void this.updateStatus(id, SessionStatus.DISCONNECTED);
+
+        // The engine destroyed itself (READY_TIMEOUT does exactly this), so
+        // drop it from the live map. Without this the session reads
+        // 'disconnected' while start() still answers "Session is already
+        // started", which left alserafa34 unrecoverable on 2026-09-18 once its
+        // reconnect attempts were exhausted.
+        this.engines.delete(id);
 
         // Attempt to reconnect
         this.scheduleReconnect(id, session);

@@ -183,8 +183,9 @@ export class AuthService implements OnModuleInit {
     return this.apiKeyRepository.save(apiKey);
   }
 
-  async delete(id: string, ownerUserId?: string | null): Promise<void> {
+  async delete(id: string, ownerUserId?: string | null, caller?: ApiKey | null): Promise<void> {
     const apiKey = await this.findOne(id, ownerUserId);
+    this.assertNotSelf(apiKey, caller, 'delete');
     await this.apiKeyRepository.remove(apiKey);
     this.logger.log(`API key deleted: ${apiKey.name}`, {
       keyId: id,
@@ -192,8 +193,51 @@ export class AuthService implements OnModuleInit {
     });
   }
 
-  async revoke(id: string, ownerUserId?: string | null): Promise<ApiKey> {
+  /**
+   * Revoking the key the request is authenticating with locks the caller out
+   * of the dashboard entirely: every later request answers 401 "API key is
+   * revoked" and the UI has no way to recover. Since login-issued keys are
+   * listed alongside integration keys, that trap is one click away, so refuse
+   * it outright.
+   */
+  private assertNotSelf(apiKey: ApiKey, caller?: ApiKey | null, verb = 'revoke'): void {
+    if (caller && caller.id === apiKey.id) {
+      throw new ForbiddenException(`Cannot ${verb} the key you are currently using. Sign out instead.`);
+    }
+  }
+
+  /**
+   * Issue a fresh secret for an existing key row, keeping its name, role, owner
+   * and restrictions. Only the hash is stored, so a lost key can never be read
+   * back — rotating it is the only way to recover access, and the new secret is
+   * shown once, exactly like creation.
+   */
+  async regenerateApiKey(
+    id: string,
+    ownerUserId?: string | null,
+    caller?: ApiKey | null,
+  ): Promise<{ apiKey: ApiKey; rawKey: string }> {
     const apiKey = await this.findOne(id, ownerUserId);
+    // Rotating the key in use would invalidate the caller's own session.
+    this.assertNotSelf(apiKey, caller, 'regenerate');
+
+    const rawKey = `owa_k1_${randomBytes(32).toString('hex')}`;
+    apiKey.keyHash = this.hashKey(rawKey);
+    apiKey.keyPrefix = rawKey.substring(0, 12);
+    apiKey.isActive = true;
+
+    const saved = await this.apiKeyRepository.save(apiKey);
+    this.logger.log(`API key regenerated: ${saved.name}`, {
+      keyId: saved.id,
+      action: 'api_key_regenerated',
+    });
+
+    return { apiKey: saved, rawKey };
+  }
+
+  async revoke(id: string, ownerUserId?: string | null, caller?: ApiKey | null): Promise<ApiKey> {
+    const apiKey = await this.findOne(id, ownerUserId);
+    this.assertNotSelf(apiKey, caller, 'revoke');
     apiKey.isActive = false;
     return this.apiKeyRepository.save(apiKey);
   }

@@ -234,6 +234,17 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ message: response.statusText }));
+
+    // A key that the server no longer accepts — revoked, expired, or rotated by
+    // a login elsewhere — otherwise dead-ends the UI: every request 401s and
+    // nothing offers a way back. Drop it and return to the login screen so the
+    // user can get a fresh one.
+    if (response.status === 401 && apiKey) {
+      localStorage.removeItem('openwa_api_key');
+      localStorage.removeItem('openwa_user_role');
+      window.location.reload();
+    }
+
     throw new Error(error.message || `HTTP ${response.status}`);
   }
 
@@ -315,6 +326,8 @@ export const apiKeyApi = {
     }),
   delete: (id: string) => request<void>(`/auth/api-keys/${id}`, { method: 'DELETE' }),
   revoke: (id: string) => request<ApiKey>(`/auth/api-keys/${id}/revoke`, { method: 'POST' }),
+  /** Returns the new secret once; the old one stops working immediately. */
+  regenerate: (id: string) => request<ApiKey>(`/auth/api-keys/${id}/regenerate`, { method: 'POST' }),
 };
 
 // =============================================================================
@@ -597,9 +610,7 @@ export const contactApi = {
       `/sessions/${sessionId}/contacts/check/${encodeURIComponent(number)}`,
     ),
   getProfilePicture: (sessionId: string, contactId: string) =>
-    request<{ url: string | null }>(
-      `/sessions/${sessionId}/contacts/${encodeURIComponent(contactId)}/profile-picture`,
-    ),
+    request<{ url: string | null }>(`/sessions/${sessionId}/contacts/${encodeURIComponent(contactId)}/profile-picture`),
 };
 
 // =============================================================================

@@ -116,7 +116,35 @@ export class AuthController {
   @ApiOperation({ summary: 'Delete API key (scoped to your account)' })
   @ApiResponse({ status: 204, description: 'API key deleted' })
   async delete(@Param('id') id: string, @CurrentApiKey() caller?: ApiKey): Promise<void> {
-    await this.authService.delete(id, this.sessionAccess.scopeFor(caller));
+    await this.authService.delete(id, this.sessionAccess.scopeFor(caller), caller);
+  }
+
+  @Post(':id/regenerate')
+  @RequireRole(ApiKeyRole.OPERATOR)
+  @ApiOperation({
+    summary: 'Issue a fresh secret for an existing key (scoped to your account)',
+    description:
+      'Only the hash of a key is stored, so a lost key cannot be read back. This rotates the secret and ' +
+      'returns the new one once; the old secret stops working immediately.',
+  })
+  @ApiResponse({ status: 201, description: 'New secret issued', type: ApiKeyCreatedResponseDto })
+  @ApiResponse({ status: 403, description: 'Cannot regenerate the key you are currently using' })
+  async regenerate(@Param('id') id: string, @CurrentApiKey() caller?: ApiKey): Promise<ApiKeyCreatedResponseDto> {
+    const { apiKey, rawKey } = await this.authService.regenerateApiKey(id, this.sessionAccess.scopeFor(caller), caller);
+    return {
+      id: apiKey.id,
+      name: apiKey.name,
+      keyPrefix: apiKey.keyPrefix,
+      role: apiKey.role,
+      allowedIps: apiKey.allowedIps || undefined,
+      allowedSessions: apiKey.allowedSessions || undefined,
+      isActive: apiKey.isActive,
+      expiresAt: apiKey.expiresAt || undefined,
+      lastUsedAt: apiKey.lastUsedAt || undefined,
+      usageCount: apiKey.usageCount,
+      createdAt: apiKey.createdAt,
+      apiKey: rawKey,
+    };
   }
 
   @Post(':id/revoke')
@@ -124,7 +152,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Revoke API key (scoped to your account)' })
   @ApiResponse({ status: 200, type: ApiKeyResponseDto })
   async revoke(@Param('id') id: string, @CurrentApiKey() caller?: ApiKey): Promise<ApiKeyResponseDto> {
-    const k = await this.authService.revoke(id, this.sessionAccess.scopeFor(caller));
+    const k = await this.authService.revoke(id, this.sessionAccess.scopeFor(caller), caller);
     return {
       id: k.id,
       name: k.name,

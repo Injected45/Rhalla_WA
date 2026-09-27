@@ -2,6 +2,8 @@ import { EventEmitter } from 'events';
 import { Client, LocalAuth, MessageMedia, Message } from 'whatsapp-web.js';
 import { fetchAndDecryptWhatsAppMedia, RawMediaInfo } from './wa-media-decrypt';
 import { reflectChatsFromWAWeb, ReflectedChat } from './wa-chats-reflect';
+import { sendMediaViaWAWeb } from './wa-media-send';
+import { installMemoizePatch } from './wa-memoize-patch';
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
 import * as qrcode from 'qrcode';
 import * as path from 'path';
@@ -62,12 +64,47 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
   private pushName: string | null = null;
   private callbacks: EngineEventCallbacks = {};
   private readyTimeoutHandle: NodeJS.Timeout | null = null;
+  private frameHealthHandle: NodeJS.Timeout | null = null;
+  // Set to true after we've reported a detached frame so we don't fire the
+  // disconnect callback repeatedly while destroy()/reconnect is unwinding.
+  private frameDetached = false;
+  // Counts consecutive frame-health pings that timed out (browser tab is
+  // alive but unresponsive). A single timeout can be transient GC/Chromium
+  // hiccup, but N in a row means the tab is silently hung — we saw this on
+  // 2026-09-22 where every send timed out for ~2 hours before recovery.
+  private frameTimeoutStreak = 0;
+
+  // How often to ping the wwjs pupPage to detect a silently-detached Chromium
+  // frame — WhatsApp Web occasionally kills its own tab and wwjs's
+  // `disconnected` event does NOT fire, so the session sits READY forever
+  // while every API call hits "Attempted to use detached Frame". This watchdog
+  // trips the disconnected callback so the reconnect scheduler recovers it
+  // automatically instead of needing a manual /stop → /start.
+  private static readonly FRAME_HEALTH_INTERVAL_MS = parseInt(
+    process.env.ENGINE_FRAME_HEALTH_MS || '60000',
+    10,
+  );
+  // After this many consecutive frame-health timeouts, treat the tab as
+  // hung and trip the disconnect so the reconnect scheduler recovers it.
+  // 3 × 60s = 3 minutes of unresponsive tab before we tear it down.
+  private static readonly FRAME_TIMEOUT_STREAK_LIMIT = parseInt(
+    process.env.ENGINE_FRAME_TIMEOUT_STREAK || '3',
+    10,
+  );
 
   // If wwjs fires `authenticated` (auth succeeded) but never fires `ready`
   // (WhatsApp Web's chat loader is stuck) this many ms after auth, treat the
   // session as wedged and mark it FAILED so ops sees it clearly and the
   // controlling service can recover (retry, or trigger a QR rescan).
-  private static readonly READY_AFTER_AUTH_TIMEOUT_MS = 90_000;
+  // 90s proved far too tight for accounts with a large chat history: on
+  // 2026-09-18 alserafa34 authenticated and then failed to finish loading
+  // chats inside the window 17 times in a row, so the session could not come
+  // back at all. Raised to 240s and made configurable — this is a "wedged"
+  // detector, so it only needs to be longer than a legitimately slow load.
+  private static readonly READY_AFTER_AUTH_TIMEOUT_MS = parseInt(
+    process.env.ENGINE_READY_TIMEOUT_MS || '240000',
+    10,
+  );
 
   constructor(private readonly config: WhatsAppWebJsConfig) {
     super();
@@ -197,6 +234,12 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
 
     this.client.on('ready', () => {
       this.clearReadyTimeout();
+      this.frameDetached = false;
+      this.armFrameHealth();
+      // WA Web ~2026-09-18 build made a memoize helper throw for undefined
+      // inputs, which crashed every media send. Patch that helper in place
+      // right after ready so wwjs's own send code can complete normally.
+      void this.installMemoizePatchWithLogging();
       try {
         const info = this.client?.info;
         this.phoneNumber = info?.wid?.user || null;
@@ -239,12 +282,14 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
 
     this.client.on('disconnected', reason => {
       this.clearReadyTimeout();
+      this.clearFrameHealth();
       this.setStatus(EngineStatus.DISCONNECTED);
       this.callbacks.onDisconnected?.(reason);
     });
 
     this.client.on('auth_failure', () => {
       this.clearReadyTimeout();
+      this.clearFrameHealth();
       this.setStatus(EngineStatus.FAILED);
       this.callbacks.onDisconnected?.('Authentication failed');
     });
@@ -269,6 +314,118 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
     if (this.readyTimeoutHandle) {
       clearTimeout(this.readyTimeoutHandle);
       this.readyTimeoutHandle = null;
+    }
+  }
+
+  private static isDetachedFrameError(err: unknown): boolean {
+    const msg = err instanceof Error ? err.message : String(err ?? '');
+    return /detached\s+Frame|Target closed|Session closed|Protocol error \(Runtime\.callFunctionOn\): Target closed/i.test(
+      msg,
+    );
+  }
+
+  /**
+   * A live wwjs session can silently lose its Chromium frame (WhatsApp Web
+   * killing its own tab, Chromium OOM, etc). wwjs's `disconnected` event does
+   * NOT fire in that state, so the session sits READY forever while every API
+   * call hits "Attempted to use detached Frame". This watchdog pings the page
+   * every FRAME_HEALTH_INTERVAL_MS and, when it detects a detached frame,
+   * fires the disconnected callback so the reconnect scheduler recovers it.
+   */
+  private armFrameHealth(): void {
+    this.clearFrameHealth();
+    this.frameHealthHandle = setInterval(() => {
+      void this.checkFrameHealth();
+    }, WhatsAppWebJsAdapter.FRAME_HEALTH_INTERVAL_MS);
+  }
+
+  private clearFrameHealth(): void {
+    if (this.frameHealthHandle) {
+      clearInterval(this.frameHealthHandle);
+      this.frameHealthHandle = null;
+    }
+  }
+
+  private static isProtocolTimeoutError(err: unknown): boolean {
+    const msg = err instanceof Error ? err.message : String(err ?? '');
+    return /Runtime\.(evaluate|callFunctionOn) timed out|ProtocolError.*timed out/i.test(msg);
+  }
+
+  private async checkFrameHealth(): Promise<void> {
+    if (this.status !== EngineStatus.READY || this.frameDetached) return;
+    const pupPage = (this.client as unknown as { pupPage?: import('puppeteer').Page })?.pupPage;
+    if (!pupPage) return;
+    try {
+      // A trivial evaluate is enough — if the frame is detached puppeteer
+      // rejects with "Attempted to use detached Frame" almost immediately.
+      await pupPage.evaluate('1');
+      // Success → reset the streak counter.
+      this.frameTimeoutStreak = 0;
+    } catch (err) {
+      if (WhatsAppWebJsAdapter.isDetachedFrameError(err)) {
+        this.reportFrameDetached('watchdog', err);
+        return;
+      }
+      if (WhatsAppWebJsAdapter.isProtocolTimeoutError(err)) {
+        this.frameTimeoutStreak++;
+        this.logger.warn(
+          `frameHealth ping timed out (streak ${this.frameTimeoutStreak}/${WhatsAppWebJsAdapter.FRAME_TIMEOUT_STREAK_LIMIT}): ${String((err as Error)?.message ?? err).slice(0, 200)}`,
+        );
+        // On 2026-09-22 alserafa34 sat READY-but-hung for ~2h with every
+        // send timing out. A single timeout can be a GC pause; N in a row
+        // means the tab is silently unresponsive — tear it down so the
+        // reconnect scheduler recovers it.
+        if (this.frameTimeoutStreak >= WhatsAppWebJsAdapter.FRAME_TIMEOUT_STREAK_LIMIT) {
+          this.reportFrameDetached('watchdog-timeout-streak', err);
+        }
+        return;
+      }
+      // Anything else — log but don't tear down; could be a one-off wwjs
+      // hiccup that recovers by itself.
+      this.logger.warn(`frameHealth ping failed non-fatally: ${String((err as Error)?.message ?? err)}`);
+    }
+  }
+
+  /**
+   * Fire the disconnected callback exactly once when we discover the browser
+   * frame is dead. Called from the watchdog and from runSend() when a send
+   * attempt catches the same error class.
+   */
+  private reportFrameDetached(source: string, err: unknown): void {
+    if (this.frameDetached) return;
+    this.frameDetached = true;
+    this.clearFrameHealth();
+    this.logger.error(
+      `Chromium frame detached (source=${source}) — session is a zombie, tripping disconnect for auto-reconnect. err=${String(
+        (err as Error)?.message ?? err,
+      ).slice(0, 200)}`,
+    );
+    this.setStatus(EngineStatus.FAILED);
+    this.callbacks.onDisconnected?.('FRAME_DETACHED');
+    // Best-effort teardown so the next start() gets a clean browser.
+    void this.destroy().catch(e =>
+      this.logger.warn(`destroy after FRAME_DETACHED failed: ${String(e)}`),
+    );
+  }
+
+  private async installMemoizePatchWithLogging(): Promise<void> {
+    const pupPage = (this.client as unknown as { pupPage?: import('puppeteer').Page })?.pupPage;
+    if (!pupPage) return;
+    try {
+      const result = await installMemoizePatch(pupPage);
+      if (result.patched) {
+        this.logger.log(
+          `WA-Web memoize helper patched — ${result.functionsPatched} function(s) wrapped across ${result.scannedModules} modules. Media sends should now bypass the getSender crash.`,
+        );
+      } else {
+        this.logger.warn(
+          `WA-Web memoize helper NOT patched — scanned ${result.scannedModules} modules, found no matching function${result.error ? ` (error: ${result.error})` : ''}. Media sends may still fail.`,
+        );
+      }
+    } catch (err) {
+      this.logger.error(
+        `installMemoizePatch crashed: ${String((err as Error)?.message ?? err)}`,
+      );
     }
   }
 
@@ -464,6 +621,7 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
 
   async destroy(): Promise<void> {
     this.clearReadyTimeout();
+    this.clearFrameHealth();
     if (this.client) {
       await this.client.destroy();
       this.client = null;
@@ -527,6 +685,20 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
       const msg = await sendFn();
       return this.resolveSendResult(msg, context);
     } catch (err) {
+      // Detached-frame is fatal — the message did NOT reach WhatsApp because
+      // the browser was dead before the send. Trip the disconnect so the
+      // reconnect scheduler recovers this session, and rethrow so the caller
+      // sees a real failure (not a "delivered without id" lie).
+      if (WhatsAppWebJsAdapter.isDetachedFrameError(err)) {
+        this.reportFrameDetached(context, err);
+        throw err;
+      }
+      // Protocol timeout = the tab is silently hung. Message did NOT reach
+      // WhatsApp. Trip the disconnect so the reconnect scheduler recovers.
+      if (WhatsAppWebJsAdapter.isProtocolTimeoutError(err)) {
+        this.reportFrameDetached(context, err);
+        throw err;
+      }
       if (this.isLikelyPostSendError(err)) {
         // ensureReady() would already have thrown for a session-dead state, and the
         // outbound frame reaches WhatsApp before this class of error fires. Treat as
@@ -600,9 +772,61 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
       messageMedia = new MessageMedia(media.mimetype, media.data.toString('base64'), media.filename);
     }
 
-    return this.runSend('sendMediaMessage', () =>
-      this.client!.sendMessage(chatId, messageMedia, { caption: media.caption }),
-    );
+    // Try wwjs's own send first. If it throws with the "memoize getter"
+    // pattern that the 2026-09 WA Web build introduced, fall through to our
+    // own puppeteer-side send that mirrors wwjs but skips the failing step.
+    try {
+      return await this.runSend('sendMediaMessage', () =>
+        this.client!.sendMessage(chatId, messageMedia, { caption: media.caption }),
+      );
+    } catch (err) {
+      if (!WhatsAppWebJsAdapter.isMemoizeGetterError(err)) {
+        throw err;
+      }
+      const primary = String((err as Error)?.message ?? err).slice(0, 200);
+      this.logger.warn(
+        `wwjs sendMessage hit the WA-Web memoize getter bug, falling back to native send: ${primary}`,
+      );
+      return this.nativeMediaSend(chatId, messageMedia, media.caption);
+    }
+  }
+
+  /**
+   * WA Web (from ~2026-09-18) throws this exact error inside wwjs's
+   * pupPage.evaluate during media sends. Text sends aren't affected because
+   * they don't go through the same media memoization step.
+   */
+  private static isMemoizeGetterError(err: unknown): boolean {
+    const msg = (err instanceof Error ? err.message : String(err ?? '')).toLowerCase();
+    return msg.includes("passed to getter must include an id property") ||
+      msg.includes("must include an id property (it's how we memoize)");
+  }
+
+  private async nativeMediaSend(
+    chatId: string,
+    media: MessageMedia,
+    caption?: string,
+  ): Promise<MessageResult> {
+    const pupPage = (this.client as unknown as { pupPage?: import('puppeteer').Page })?.pupPage;
+    if (!pupPage) throw new Error('nativeMediaSend: pupPage unavailable');
+    const result = await sendMediaViaWAWeb(pupPage, {
+      chatId,
+      base64: media.data,
+      mimetype: media.mimetype,
+      filename: media.filename ?? undefined,
+      caption,
+    });
+    if (!result.ok) {
+      this.logger.error(
+        `nativeMediaSend failed at step=${result.step}: ${result.error?.slice(0, 400)}`,
+      );
+      throw new Error(`Native media send failed at step ${result.step}: ${result.error}`);
+    }
+    this.logger.log(`Native media send succeeded (id=${result.id})`);
+    return {
+      id: result.id || '',
+      timestamp: result.timestamp || Math.floor(Date.now() / 1000),
+    };
   }
 
   async getContacts(): Promise<Contact[]> {

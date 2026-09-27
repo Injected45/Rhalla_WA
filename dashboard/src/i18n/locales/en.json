@@ -595,8 +595,12 @@
     "actions": {
       "copy": "Copy",
       "revoke": "Revoke",
-      "delete": "Delete"
-    }
+      "delete": "Delete",
+      "regenerate": "Issue a new secret"
+    },
+    "currentSession": "Current session",
+    "regeneratedTitle": "New Secret Issued",
+    "regeneratedHint": "Copy this key now — it is shown only once. The previous secret has stopped working."
   },
   "users": {
     "title": "Accounts",

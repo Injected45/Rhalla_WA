@@ -396,5 +396,34 @@ describe('AuthService', () => {
 
       await expect(service.findOne('key-1', null)).resolves.toBe(key);
     });
+
+    it('should refuse to revoke the key the caller is signed in with', async () => {
+      // This is one click away in the dashboard and locks the user out
+      // entirely: every later request answers 401 "API key is revoked".
+      const key = createMockApiKey({ id: 'same-key', ownerUserId: 'user-a' });
+      (repository.findOne as jest.Mock).mockResolvedValue(key);
+
+      await expect(service.revoke('same-key', 'user-a', key)).rejects.toThrow(ForbiddenException);
+      expect(repository.save).not.toHaveBeenCalled();
+    });
+
+    it('should refuse to delete the key the caller is signed in with', async () => {
+      const key = createMockApiKey({ id: 'same-key', ownerUserId: 'user-a' });
+      (repository.findOne as jest.Mock).mockResolvedValue(key);
+
+      await expect(service.delete('same-key', 'user-a', key)).rejects.toThrow(ForbiddenException);
+      expect(repository.remove).not.toHaveBeenCalled();
+    });
+
+    it('should still allow revoking a different key of the same account', async () => {
+      const caller = createMockApiKey({ id: 'session-key', ownerUserId: 'user-a' });
+      const other = createMockApiKey({ id: 'integration-key', ownerUserId: 'user-a' });
+      (repository.findOne as jest.Mock).mockResolvedValue(other);
+      (repository.save as jest.Mock).mockImplementation(k => Promise.resolve(k));
+
+      const result = await service.revoke('integration-key', 'user-a', caller);
+
+      expect(result.isActive).toBe(false);
+    });
   });
 });

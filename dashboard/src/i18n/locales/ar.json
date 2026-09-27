@@ -595,8 +595,12 @@
     "actions": {
       "copy": "نسخ",
       "revoke": "إلغاء",
-      "delete": "حذف"
-    }
+      "delete": "حذف",
+      "regenerate": "إصدار مفتاح جديد"
+    },
+    "currentSession": "الجلسة الحالية",
+    "regeneratedTitle": "تم إصدار مفتاح جديد",
+    "regeneratedHint": "انسخ المفتاح الآن — يُعرض مرة واحدة فقط. المفتاح السابق توقّف عن العمل."
   },
   "users": {
     "title": "الحسابات",
